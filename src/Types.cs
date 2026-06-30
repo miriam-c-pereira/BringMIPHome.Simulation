@@ -19,7 +19,8 @@ namespace BringMIPHome.Simulation
         Start,
         Station1,
         Station2,
-        Station3
+        Station3,
+        Station4,
     }
 
     public enum ActionType
@@ -30,6 +31,7 @@ namespace BringMIPHome.Simulation
         GoToStation1,
         GoToStation2,
         GoToStation3,
+        GoToStation4,
         Fix,
         DetachBattery,
         AttachBattery

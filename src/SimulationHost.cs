@@ -1,3 +1,4 @@
+#nullable enable
 namespace BringMIPHome.Simulation
 {
     using System;
@@ -15,19 +16,22 @@ namespace BringMIPHome.Simulation
         public float TimeLeft => this.State?.TimeLeft ?? 0f;
         public LocationType CurrentLocation => this.State?.CurrentLocation ?? LocationType.None;
         public DoneReasonType DoneReason => this.State?.Done ?? DoneReasonType.NotDone;
-        public IReadOnlyList<RoverBattery> Batteries => this.State?.Batteries;
+        public IReadOnlyList<RoverBattery> Batteries => this.State.Batteries;
 
         // Injected interfaces for decoupled communication
-        private readonly IRoverDriver roverDriver;
-        private readonly IConsoleLogger logger;
+        private readonly IRoverController roverController;
+        private readonly IEnumerable<IChargingStationController> chargingStationControllers;
+        private readonly IMissionControlController mcController;
+
 
         public event Action<SimState, SimState, SimEvent> OnStepCompleted = (b, a, e) => { };
 
-        public SimulationHost(SimConfig config, IRoverDriver roverDriver, IConsoleLogger logger)
+        public SimulationHost(SimConfig config, IRoverController roverController, IEnumerable<IChargingStationController> chargingStations, IMissionControlController missionControlController)
         {
             this.Config = config ?? throw new ArgumentNullException(nameof(config));
-            this.roverDriver = roverDriver ?? throw new ArgumentNullException(nameof(roverDriver));
-            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            this.roverController = roverController ?? throw new ArgumentNullException(nameof(roverController));
+            this.chargingStationControllers = chargingStations ?? throw new ArgumentNullException(nameof(chargingStations));
+            this.mcController = missionControlController ?? throw new ArgumentNullException(nameof(missionControlController));
 
             this.Random = this.Config.RandomSeed != null
                 ? new Random(this.Config.RandomSeed.Value)
@@ -81,8 +85,6 @@ namespace BringMIPHome.Simulation
             {
                 return null;
             }
-
-            this.logger.LogMessage($"Start action '{action}'", nameof(SimulationHost));
 
             var before = this.State.GetSnapshot();
 
@@ -166,11 +168,11 @@ namespace BringMIPHome.Simulation
 
             if (stationAccessSequence != null)
             {
-                this.roverDriver.NavigateToStation(stationAccessSequence);
+                this.roverController.NavigateToStation(stationAccessSequence);
             }
             else
             {
-                this.logger.LogMessage($"No auto-navigation available to {newLocation}.", nameof(SimulationHost));
+                this.mcController.ConsoleMessage($"No auto-navigation available to {newLocation}.", null);
             }
 
             this.SetEnergy(this.State.Energy - this.Config.GoToEnergyCost);
@@ -198,7 +200,14 @@ namespace BringMIPHome.Simulation
                 1.5f
             );
 
-            this.roverDriver.PlayExtractionVisuals(args);
+            var ctl = this.chargingStationControllers.FirstOrDefault(x => x.Location == stationState.Location);
+            if (ctl == null)
+            {
+                this.mcController.ConsoleMessage($"Charging station controller for {stationState.Location} not found.", null);
+                return;
+            }
+
+            ctl.PlayExtractionVisuals(args);
 
             if (stationState.LastExtractOutcome.BecameDepleted)
             {
@@ -219,8 +228,15 @@ namespace BringMIPHome.Simulation
                 0.15f
             );
 
-            this.roverDriver.PlayUploadVisuals(args);
+            var ctl = this.chargingStationControllers.FirstOrDefault(x => x.Location == station.Location);
+            if (ctl == null)
+            {
+                this.mcController.ConsoleMessage($"Charging station controller for {station.Location} not found.", null);
+                return;
+            }
 
+            ctl.PlayUploadVisuals(args);
+            
             station.ApplyUpload();
         }
 

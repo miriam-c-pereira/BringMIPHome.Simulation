@@ -36,10 +36,13 @@ namespace BringMIPHome.Simulation
             this.TransferSpeed = transferSpeed;
         }
     }
-    public interface IRoverDriver
+
+    public interface IChargingStationController
     {
-        void NavigateToStation(StationAccessSequence sequence);
+        public LocationType Location { get; }
+        
         void PlayExtractionVisuals(ExtractionVisualsArgs args);
+        
         void PlayUploadVisuals(UploadVisualsArgs args);
     }
 }
