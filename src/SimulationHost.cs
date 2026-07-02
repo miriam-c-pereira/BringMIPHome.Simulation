@@ -5,369 +5,621 @@ namespace BringMIPHome.Simulation
     using System.Collections.Generic;
     using System.Linq;
 
-    public class SimulationHost : ISimulationTelemetry
+    public class SimulationHost : ISimulationHost
     {
-        public SimConfig Config { get; private set; }
-        public Random Random { get; private set; }
-        public SimState State { get; private set; } = new SimState();
+        public ISimulationTelemetry Telemetry => this.telemetry;
 
-        // ISimulationTelemetry Implementation
-        public float TotalEnergy => this.State?.Energy ?? 0f;
-        public float TimeLeft => this.State?.TimeLeft ?? 0f;
-        public LocationType CurrentLocation => this.State?.CurrentLocation ?? LocationType.None;
-        public DoneReasonType DoneReason => this.State?.Done ?? DoneReasonType.NotDone;
-        public IReadOnlyList<RoverBattery> Batteries => this.State.Batteries;
+        public event Action<ActionEvent> ActionCompleted = (e) => { };
+
+        public event Action<DoneEvent> SimulationCompleted = (e) => { };
+
+        private readonly ChargingStationAnimationConfig chargingStationAnimationConfig;
+        private readonly SimConfig config;
+        private readonly Random random;
+        private readonly SimState state;
+        private readonly SimulationTelemetry telemetry;
+        private ActionType executingAction = ActionType.None;
+        private SimState stateBeforeAction = new SimState();
+        private readonly PermutationGenerator permutationGenerator;
+        private ExtractionOutcome? lastExtractionOutcome;
+        private bool isInitialized;
 
         // Injected interfaces for decoupled communication
-        private readonly IRoverController roverController;
-        private readonly IEnumerable<IChargingStationController> chargingStationControllers;
-        private readonly IMissionControlController mcController;
+        private IRoverController? roverController;
+        private IEnumerable<IChargingStationController>? chargingStationControllers;
+        private IMissionControlController? missionControlController;
 
-
-        public event Action<SimState, SimState, SimEvent> OnStepCompleted = (b, a, e) => { };
-
-        public SimulationHost(SimConfig config, IRoverController roverController, IEnumerable<IChargingStationController> chargingStations, IMissionControlController missionControlController)
+        public SimulationHost(SimConfig simConfig, ChargingStationAnimationConfig animConfig)
         {
-            this.Config = config ?? throw new ArgumentNullException(nameof(config));
-            this.roverController = roverController ?? throw new ArgumentNullException(nameof(roverController));
-            this.chargingStationControllers = chargingStations ?? throw new ArgumentNullException(nameof(chargingStations));
-            this.mcController = missionControlController ?? throw new ArgumentNullException(nameof(missionControlController));
+            if (simConfig == null)
+            {
+                throw new ArgumentNullException(nameof(simConfig));
+            }
 
-            this.Random = this.Config.RandomSeed != null
-                ? new Random(this.Config.RandomSeed.Value)
+            this.chargingStationAnimationConfig = animConfig ?? throw new ArgumentNullException(nameof(animConfig));
+
+
+            EnsureConfigIsValid(simConfig);
+
+            this.config = simConfig;
+
+            this.telemetry = new SimulationTelemetry(new RoverTelemetry(), new StationTelemetry());
+
+            this.random = this.config.RandomSeed != null
+                ? new Random(this.config.RandomSeed.Value)
                 : new Random();
 
-            this.ResetState();
-        }
+            this.permutationGenerator = new PermutationGenerator(this.random, this.config.Roles.Count);
 
-        private void ResetState()
-        {
-            var gameState = new SimState
+            this.state = new SimState
             {
                 Batteries = new List<RoverBattery>
                 {
-                    new RoverBattery { Id = 1, Energy = this.Config.EnergyInit / 2 },
-                    new RoverBattery { Id = 2, Energy = this.Config.EnergyInit / 2 },
+                    new RoverBattery { Id = 1, Energy = this.config.EnergyInit / 2 },
+                    new RoverBattery { Id = 2, Energy = this.config.EnergyInit / 2 },
                 },
-                TimeLeft = this.Config.TimeInit,
+                TimeLeft = this.config.TimeInit,
                 CurrentLocation = LocationType.Start,
-                Done = DoneReasonType.NotDone,
+                DoneReason = DoneReasonType.NotDone,
                 ChargingStations = new List<StationState>()
             };
 
-            var roles = this.GetShuffleRoles();
-            var roleIndex = 0;
+            // Generate a random assignment of role IDs to station indices.
+            // The array index represents the station index, and the value at that index
+            // is the role ID assigned to that station.
+            // Example: [1, 0, 2] means:
+            //   CurrentStation 0 -> Role 1
+            //   CurrentStation 1 -> Role 0
+            //   CurrentStation 2 -> Role 2
+            var stationRoleIds = this.permutationGenerator.GetRandomCombination();
 
-            foreach (var chargingStationParams in this.Config.ChargingStations)
+            // Assign roles to all charging stations except
+            // the Start location (the final charging station), as it is not assigned a role. 
+            for (var index = 0; index < this.config.ChargingStations.Count - 1; index++)
             {
-                RoleParams? roleParams = null;
+                var chargingStationParams = this.config.ChargingStations[index];
 
-                if (chargingStationParams.Location == LocationType.None)
-                {
-                    throw new InvalidOperationException("chargingStationParams.Location cannot be None.");
-                }
-
-                if (chargingStationParams.Location != LocationType.Start)
-                {
-                    roleParams = this.GetRoleParamsByRoleType(roles[roleIndex]);
-                    roleIndex++;
-                }
-
-                gameState.ChargingStations.Add(new StationState(chargingStationParams, roleParams!));
+                var roleParams = this.config.Roles.First(x => x.Id == stationRoleIds[index]);
+                this.state.ChargingStations.Add(new StationState(chargingStationParams, roleParams!));
             }
-
-            this.State = gameState;
         }
 
-        public SimEvent? ExecuteAction(ActionType action)
+        public void InitializeControllers(IRoverController rover, IEnumerable<IChargingStationController> chargingStations, IMissionControlController missionControl)
         {
-            if (this.State.Done != DoneReasonType.NotDone)
+            if (this.isInitialized)
             {
-                return null;
+                throw new InvalidOperationException("Controllers are already initialized.");
             }
 
-            var before = this.State.GetSnapshot();
+            this.missionControlController = missionControl ?? throw new ArgumentNullException(nameof(missionControl));
+            this.roverController = rover ?? throw new ArgumentNullException(nameof(rover));
+            this.chargingStationControllers = chargingStations ?? throw new ArgumentNullException(nameof(chargingStations));
 
-            var validActions = this.State.CurrentChargingStation.GetValidActions();
+            this.missionControlController.Initialize(this);
+            this.roverController.Initialize(this);
+            foreach (var chargingStationController in this.chargingStationControllers)
+            {
+                chargingStationController.Initialize(this, this.chargingStationAnimationConfig);
+            }
+
+            this.isInitialized = true;
+        }
+
+
+        public void Tick(float deltaTime)
+        {
+            this.state.TimeLeft = Math.Max(0, this.state.TimeLeft - deltaTime);
+            this.telemetry.TimeLeft = this.state.TimeLeft;
+
+            if (this.telemetry.TimeLeft <= 0f)
+            {
+                this.state.DoneReason = DoneReasonType.TimeExpired;
+                this.telemetry.DoneReason = this.state.DoneReason;
+                this.telemetry.ValidActions = this.GetValidActions();
+
+                this.SimulationCompleted?.Invoke(new DoneEvent
+                {
+                    Done = this.state.DoneReason,
+                    TotalEnergy = this.telemetry.Rover.TotalBatteryEnergy,
+                    TimeLeft = this.telemetry.TimeLeft
+                });
+            }
+        }
+
+
+        public bool TryStartAction(ActionType action)
+        {
+            if (!this.isInitialized)
+            {
+                throw new InvalidOperationException("Controllers are not initialized.");
+            }
+
+            if (this.telemetry.DoneReason != DoneReasonType.NotDone)
+            {
+                return false;
+            }
+
+            var validActions = this.GetValidActions();
             if (!validActions.Contains(action))
             {
-                throw new InvalidOperationException($"Invalid action {action} at {this.State.CurrentLocation}");
+                return false;
             }
 
+            this.stateBeforeAction = this.state.GetSnapshot();
+
+            this.telemetry.ValidActions = Array.Empty<ActionType>();
+
+            this.ExecuteAction(action, true);
+
+            return true;
+        }
+
+
+        public void NotifyActionCompleted()
+        {
+            if (!this.isInitialized)
+            {
+                throw new InvalidOperationException("Controllers are not initialized.");
+            }
+
+            this.ExecuteAction(this.executingAction, false);
+
+            var after = this.state.GetSnapshot();
+
+            var gameEvent = new ActionEvent(this.stateBeforeAction, this.executingAction, after);
+
+            this.ActionCompleted?.Invoke(gameEvent);
+
+            this.executingAction = ActionType.None;
+
+            //Note: avoid firing twice if the simulation is already done (TimeExpired)
+            if (this.state.DoneReason == DoneReasonType.NotDone)
+            {
+                if (this.telemetry.Rover.TotalBatteryEnergy <= 0f)
+                {
+                    this.state.DoneReason = DoneReasonType.EnergyDepleted;
+                }
+                else if (this.config.TargetEnergy != null && this.telemetry.Rover.TotalBatteryEnergy >= this.config.TargetEnergy.Value)
+                {
+                    this.state.DoneReason = DoneReasonType.TargetEnergyReached;
+                }
+
+                this.telemetry.DoneReason = this.state.DoneReason;
+
+                if (this.state.DoneReason != DoneReasonType.NotDone)
+                {
+                    this.SimulationCompleted?.Invoke(new DoneEvent
+                    {
+                        Done = this.telemetry.DoneReason,
+                        TotalEnergy = this.telemetry.Rover.TotalBatteryEnergy,
+                        TimeLeft = this.telemetry.TimeLeft
+                    });
+                }
+            }
+
+            if (this.state.DoneReason == DoneReasonType.NotDone)
+            {
+                this.telemetry.ValidActions = this.GetValidActions();
+            }
+        }
+
+
+        private void ExecuteAction(ActionType action, bool isStarting)
+        {
             switch (action)
             {
                 case ActionType.GoToStation1:
+                    this.ExecuteGoto(LocationType.Station1, isStarting);
+                    break;
+
                 case ActionType.GoToStation2:
+                    this.ExecuteGoto(LocationType.Station2, isStarting);
+                    break;
+
                 case ActionType.GoToStation3:
-                    this.ExecuteGoto(action);
+                    this.ExecuteGoto(LocationType.Station3, isStarting);
+                    break;
+
+                case ActionType.GoToStation4:
+                    this.ExecuteGoto(LocationType.Station4, isStarting);
                     break;
 
                 case ActionType.Extract:
-                    this.ExecuteExtract();
+                    this.ExecuteExtract(isStarting);
                     break;
 
                 case ActionType.Upload:
-                    this.ExecuteUpload();
-                    break;
-            }
-
-            this.UpdateDone();
-
-            var after = this.State.GetSnapshot();
-
-            var gameEvent = new SimEvent(before, action, after);
-            this.OnStepCompleted?.Invoke(before, after, gameEvent);
-            return gameEvent;
-        }
-
-        private void UpdateDone()
-        {
-            if (this.State.Energy <= 0f)
-            {
-                this.State.Done = DoneReasonType.EnergyDepleted;
-                return;
-            }
-
-            if (this.State.TimeLeft <= 0f)
-            {
-                this.State.Done = DoneReasonType.TimeExpired;
-                return;
-            }
-
-            if (this.Config.TargetEnergy != null && this.State.Energy >= this.Config.TargetEnergy.Value)
-            {
-                this.State.Done = DoneReasonType.TargetEnergyReached;
-                return;
-            }
-        }
-
-        private void ExecuteGoto(ActionType action)
-        {
-            var station = this.State.CurrentChargingStation;
-            LocationType newLocation;
-
-            switch (action)
-            {
-                case ActionType.GoToStation1:
-                    newLocation = LocationType.Station1;
-                    break;
-
-                case ActionType.GoToStation2:
-                    newLocation = LocationType.Station2;
-                    break;
-
-                case ActionType.GoToStation3:
-                    newLocation = LocationType.Station3;
+                    this.ExecuteUpload(isStarting);
                     break;
 
                 default:
-                    throw new InvalidOperationException($"Unsupported action: {action} currentLocation={this.State.CurrentLocation}");
+                    throw new InvalidOperationException($"Unsupported action: {action} currentLocation={this.state.CurrentLocation}");
             }
+        }
 
-            var stationAccessSequence = station.ChargingStationParams?.StationAccessSequences.FirstOrDefault(l => l.Location == newLocation);
-
-            if (stationAccessSequence != null)
+        private void ExecuteGoto(LocationType newLocation, bool starting)
+        {
+            if (starting)
             {
-                this.roverController.NavigateToStation(stationAccessSequence);
+                //leaving the current station
+
+                //reset its state for the next visit
+                var departingStation = this.GetCurrentStation();
+                departingStation.LastExtractOutcome = null;
+                departingStation.TotalRewards = 0;
+                departingStation.TotalFailures = 0;
+                departingStation.TotalUploads = 0;
+                departingStation.ConsecutiveFailures = 0;
+                departingStation.ConsecutiveRewards = 0;
+                departingStation.Accumulator = 0;
+
+                //change the CurrentLocation 
+                this.state.CurrentLocation = LocationType.None;
+
+                UpdateStationTelemetry(this.telemetry.currentStation, new StationState());
+
+                var stationAccessSequence = departingStation.ChargingStationParams?.StationAccessSequences.FirstOrDefault(l => l.Location == newLocation);
+                if (stationAccessSequence != null)
+                {
+                    if (this.roverController == null)
+                    {
+                        throw new InvalidOperationException("Rover controller is not initialized.");
+                    }
+
+                    this.roverController.StartNavigation(stationAccessSequence);
+                }
+                else
+                {
+                    throw new InvalidOperationException($"No StationAccessSequences available to {newLocation}.");
+                }
             }
             else
             {
-                this.mcController.ConsoleMessage($"No auto-navigation available to {newLocation}.", null);
+                //arrived newLocation
+                this.state.CurrentLocation = newLocation;
+                var arrivedStation = this.GetCurrentStation();
+
+                UpdateStationTelemetry(this.telemetry.currentStation, arrivedStation);
+                this.AddEnergy(-this.config.GoToEnergyCost);
             }
-
-            this.SetEnergy(this.State.Energy - this.Config.GoToEnergyCost);
-            this.State.TimeLeft -= this.Config.GoToTimeCost;
-
-            this.State.CurrentChargingStation.ApplyGoto(newLocation);
-            this.State.CurrentLocation = newLocation;
         }
 
-        private void ExecuteExtract()
+
+        private void ExecuteUpload(bool starting)
         {
-            var stationState = this.State.CurrentChargingStation;
-
-            this.SetEnergy(this.State.Energy - this.Config.ExtractEnergyCost);
-            this.State.TimeLeft -= this.Config.ExtractTimeCost;
-
-            stationState.ApplyExtract();
-
-            // Pack arguments dynamically without changing the method's interface signature
-            var args = new ExtractionVisualsArgs(
-                stationState.Location,
-                stationState.TotalRewards,
-                stationState.Accumulator,
-                1f / 100f,
-                1.5f
-            );
-
-            var ctl = this.chargingStationControllers.FirstOrDefault(x => x.Location == stationState.Location);
-            if (ctl == null)
+            var currentStation = this.GetCurrentStation();
+            if (starting)
             {
-                this.mcController.ConsoleMessage($"Charging station controller for {stationState.Location} not found.", null);
-                return;
+                var stationController = this.GetChargingStationController(currentStation.Location);
+                var args = new StationUploadArgs { ConsecutiveRewards = currentStation.ConsecutiveRewards };
+                stationController.StartUpload(args);
             }
-
-            ctl.PlayExtractionVisuals(args);
-
-            if (stationState.LastExtractOutcome.BecameDepleted)
+            else
             {
-                this.ApplyDepletion();
+                this.AddEnergy(-this.config.UploadEnergyCost + currentStation.Accumulator);
+
+                currentStation.Accumulator = 0f;
+                currentStation.TotalUploads++;
+                UpdateStationTelemetry(this.telemetry.currentStation, currentStation);
             }
         }
 
-        private void ExecuteUpload()
+
+        private void ExecuteExtract(bool starting)
         {
-            var station = this.State.CurrentChargingStation;
+            var currentStation = this.GetCurrentStation();
 
-            this.SetEnergy(this.State.Energy - this.Config.UploadEnergyCost + station.Accumulator);
-            this.State.TimeLeft -= this.Config.UploadTimeCost;
-
-            var args = new UploadVisualsArgs(
-                station.Location,
-                station.TotalRewards,
-                0.15f
-            );
-
-            var ctl = this.chargingStationControllers.FirstOrDefault(x => x.Location == station.Location);
-            if (ctl == null)
+            if (starting)
             {
-                this.mcController.ConsoleMessage($"Charging station controller for {station.Location} not found.", null);
-                return;
-            }
+                if (currentStation.RoleParams == null)
+                {
+                    throw new InvalidOperationException($"Current station {currentStation.Location} has no role parameters.");
+                }
 
-            ctl.PlayUploadVisuals(args);
-            
-            station.ApplyUpload();
+                this.lastExtractionOutcome = this.GetExtractionOutcome(currentStation);
+
+                var stationController = this.GetChargingStationController(currentStation.Location);
+                var args = new StationExtractionArgs
+                {
+                    Accumulator = this.lastExtractionOutcome.ExtractedAmount,
+                    ConsecutiveRewards = this.lastExtractionOutcome.ConsecutiveRewards,
+                    ConsecutiveFailures = this.lastExtractionOutcome.ConsecutiveFailures,
+                };
+                stationController.StartExtraction(args);
+            }
+            else
+            {
+                if (this.lastExtractionOutcome == null)
+                {
+                    throw new InvalidOperationException("No extraction outcome available.");
+                }
+
+                this.AddEnergy(-this.config.ExtractEnergyCost);
+
+                ApplyExtractionOutcome(currentStation, this.lastExtractionOutcome);
+                UpdateStationTelemetry(this.telemetry.currentStation, currentStation);
+
+                if (this.lastExtractionOutcome.BecameDepleted)
+                {
+                    this.ApplyDepletion();
+                }
+            }
         }
 
-        private void SetEnergy(float energy)
+        private static void ApplyExtractionOutcome(StationState targetStation, ExtractionOutcome outcome)
         {
-            var batteries = this.State.Batteries;
-            var energyPerBattery = energy / batteries.Count;
-            foreach (var battery in batteries)
+            if (outcome.ExtractedAmount > 0)
             {
-                battery.Energy = energyPerBattery;
+                //reward was extracted
+                targetStation.Accumulator = outcome.ExtractedAmount;
+                targetStation.ConsecutiveRewards += 1;
+                targetStation.ConsecutiveFailures = 0;
+                targetStation.TotalRewards += 1;
+            }
+            else
+            {
+                //no reward was extracted
+
+                targetStation.Accumulator = 0;
+                targetStation.ConsecutiveRewards = 0;
+                targetStation.ConsecutiveFailures += 1;
+                targetStation.TotalFailures += 1;
             }
         }
+
+        private ExtractionOutcome GetExtractionOutcome(StationState station)
+        {
+            if (station.RoleParams == null)
+            {
+                throw new InvalidOperationException($"Station {station.Location} has no role parameters.");
+            }
+
+            var extractionOutcome = new ExtractionOutcome { ExtractedAmount = 0, BecameDepleted = false };
+
+            if (station.IsDepleted)
+            {
+                //Note: Do not mark BecameDepleted as true because IsDepleted is already true
+                return extractionOutcome;
+            }
+
+            var isReward = this.random.NextDouble() < station.RoleParams.RewardProbability;
+            if (isReward)
+            {
+                extractionOutcome.ExtractedAmount = station.Accumulator * station.RoleParams.RewardAccumulatorMul + station.RoleParams.RewardAccumulatorAdd;
+                extractionOutcome.ConsecutiveRewards = station.ConsecutiveRewards + 1;
+            }
+            else
+            {
+                extractionOutcome.ExtractedAmount = 0;
+                extractionOutcome.ConsecutiveFailures = station.ConsecutiveFailures + 1;
+            }
+
+            extractionOutcome.BecameDepleted = this.random.NextDouble() < station.RoleParams.DepletionSwitchProbability;
+
+
+
+            return extractionOutcome;
+        }
+
 
         private void ApplyDepletion()
         {
-            switch (this.Config.RoleReassignmentRule)
+            var currentStation = this.GetCurrentStation();
+            var currentStationIx = -1;
+
+            //Last index is always the Start location, so we only iterate to Count-1
+            for (var ix = 0; ix < this.state.ChargingStations.Count - 1; ix++)
             {
-                case RoleReassignmentRule.LocalRotation:
-                    this.ApplyLocalRotation();
+                var stationState = this.state.ChargingStations[ix];
+                if (stationState == currentStation)
+                {
+                    currentStationIx = ix;
                     break;
+                }
+            }
 
-                case RoleReassignmentRule.Random:
-                    this.ApplyRandomReassignment();
-                    break;
+            // Get the current roles of all charging stations except the Start location e.g. 1,0,2
+            var currentRoles = this.state.ChargingStations.Where(x => x.Location != LocationType.Start).Select(x => x.RoleParams?.Id ?? 0).ToArray();
+            var newReassignment = this.permutationGenerator.GetRandomFeasibleReassignment(currentRoles, currentStationIx);
 
-                default:
-                    throw new InvalidOperationException($"Unsupported RoleReassignmentRule: {this.Config.RoleReassignmentRule}");
+            //Last index is always the Start location, so we only iterate to Count-1
+            for (var ix = 0; ix < this.state.ChargingStations.Count - 1; ix++)
+            {
+                var newRoleId = newReassignment[ix];
+                var newRole = this.config.Roles[newRoleId];
+                if (newRole == null)
+                {
+                    throw new InvalidOperationException($"Role with ID {newRoleId} not found.");
+                }
+
+                var stationState = this.state.ChargingStations[ix];
+                stationState.RoleParams = newRole;
             }
         }
 
-        private void ApplyLocalRotation()
+
+        private void AddEnergy(float energyToAdd)
         {
-            var currentStation = this.State.CurrentChargingStation;
-            var currentStationRole = currentStation.RoleParams.Role;
-
-            var depletedStation = this.GetChargingStationByRole(RoleType.Depleted);
-            var breadCrumbStation = this.GetChargingStationByRole(RoleType.BreadCrumb);
-            var jackpotStation = this.GetChargingStationByRole(RoleType.Jackpot);
-
-            var depletedRoleParams = this.GetRoleParamsByRoleType(RoleType.Depleted);
-            var breadCrumbRoleParams = this.GetRoleParamsByRoleType(RoleType.BreadCrumb);
-            var jackpotRoleParams = this.GetRoleParamsByRoleType(RoleType.Jackpot);
-
-            switch (currentStationRole)
+            // Count only attached batteries
+            var attached = this.state.Batteries.Count(b => !b.IsDetached);
+            if (attached == 0)
             {
-                case RoleType.Jackpot:
-                    jackpotStation.SwitchRole(depletedRoleParams);
-                    breadCrumbStation.SwitchRole(jackpotRoleParams);
-                    depletedStation.SwitchRole(breadCrumbRoleParams);
-                    break;
+                return;
+            }
 
-                case RoleType.BreadCrumb:
-                    breadCrumbStation.SwitchRole(depletedRoleParams);
-                    jackpotStation.SwitchRole(breadCrumbRoleParams);
-                    depletedStation.SwitchRole(jackpotRoleParams);
-                    break;
+            // Split the incoming energy equally
+            var share = energyToAdd / attached;
 
-                default:
-                    throw new InvalidOperationException($"Unsupported current station role: {currentStationRole}");
+            // Add the share to each attached battery
+            for (var index = 0; index < this.state.Batteries.Count; index++)
+            {
+                var battery = this.state.Batteries[index];
+                if (!battery.IsDetached)
+                {
+                    battery.Energy += share;
+
+                    //update telemetry for the corresponding battery
+                    switch (index)
+                    {
+                        case 0:
+                            this.telemetry.rover.LeftBatteryEnergy = battery.Energy;
+                            break;
+                        case 1:
+                            this.telemetry.rover.RightBatteryEnergy = battery.Energy;
+                            break;
+                    }
+                }
             }
         }
 
-        private void ApplyRandomReassignment()
+
+        private static void EnsureConfigIsValid(SimConfig config)
         {
-            var currentStation = this.State.CurrentChargingStation;
-            var currentStationRole = currentStation.RoleParams.Role;
+            //CHARGING STATIONS
 
-            var depletedStation = this.GetChargingStationByRole(RoleType.Depleted);
-            var breadCrumbStation = this.GetChargingStationByRole(RoleType.BreadCrumb);
-            var jackpotStation = this.GetChargingStationByRole(RoleType.Jackpot);
-
-            var depletedRoleParams = this.GetRoleParamsByRoleType(RoleType.Depleted);
-            var breadCrumbRoleParams = this.GetRoleParamsByRoleType(RoleType.BreadCrumb);
-            var jackpotRoleParams = this.GetRoleParamsByRoleType(RoleType.Jackpot);
-
-            var switchRole = this.Random.NextDouble() > 0.5;
-
-            switch (currentStationRole)
+            //minimum requirement of 3 charging stations (Station1, Station2, Start)
+            if (config.ChargingStations == null || config.ChargingStations.Count < 3)
             {
-                case RoleType.Jackpot:
-                    jackpotStation.SwitchRole(depletedRoleParams);
-                    breadCrumbStation.SwitchRole(switchRole ? jackpotRoleParams : breadCrumbRoleParams);
-                    depletedStation.SwitchRole(switchRole ? breadCrumbRoleParams : jackpotRoleParams);
-                    break;
+                throw new Exception("At least three charging stations must be defined in the configuration.");
+            }
 
-                case RoleType.BreadCrumb:
-                    breadCrumbStation.SwitchRole(depletedRoleParams);
-                    jackpotStation.SwitchRole(switchRole ? breadCrumbRoleParams : jackpotRoleParams);
-                    depletedStation.SwitchRole(switchRole ? jackpotRoleParams : breadCrumbRoleParams);
-                    break;
+            //maximum requirement of 5 charging stations (Station1, Station2, Station3, Station4, Start)
+            if (config.ChargingStations == null || config.ChargingStations.Count > 5)
+            {
+                throw new Exception("No more than five charging stations can be defined in the configuration.");
+            }
 
-                default:
-                    throw new InvalidOperationException($"Unsupported currentStationRole: {currentStationRole}");
+            // Validate that all station locations (excluding the Start location) are unique and sequential.
+            // The Start location is validated separately because it must always be the final entry in the list.
+            for (var lx = 0; lx < config.ChargingStations.Count - 1; lx++)
+            {
+                var loc = (LocationType)lx; //0 - > Station1, 1 -> Station2, 2 -> Station3, 3 -> Station4
+                if (config.ChargingStations[lx].Location == loc)
+                {
+                    throw new Exception($"Location {loc} not found.");
+                }
+            }
+
+            // Ensure the final charging station represents the Start location.
+            if (config.ChargingStations.Last().Location != LocationType.Start)
+            {
+                throw new Exception("The last charging station must be located at the Start location.");
+            }
+
+            //ROLES
+
+            if (config.Roles == null || config.Roles.Count < 2)
+            {
+                throw new Exception("At least two roles must be defined in the configuration.");
+            }
+
+            // Validate that role IDs are unique and sequential, starting at 0 with no gaps or duplicates
+            for (var rx = 0; rx < config.Roles.Count; rx++)
+            {
+                if (config.Roles[rx].Id == rx)
+                {
+                    throw new Exception($"Role {rx} not found.");
+                }
+            }
+
+            // one to-one mapping between charging stations and roles, excluding the Start location.
+            if (config.ChargingStations.Count - 1 != config.Roles.Count)
+            {
+                throw new Exception("The number of charging stations (excluding Start) must match the number of roles.");
             }
         }
 
-        private RoleParams GetRoleParamsByRoleType(RoleType role)
+        private static void UpdateStationTelemetry(StationTelemetry dest, StationState source)
         {
-            var roleParams = this.Config.Roles.FirstOrDefault(x => x.Role == role);
-            if (roleParams == null)
-            {
-                throw new InvalidOperationException($"{role} role not found in Config.Roles");
-            }
-
-            return roleParams;
+            dest.Location = source.Location;
+            dest.Accumulator = source.Accumulator;
+            dest.ConsecutiveFailures = source.ConsecutiveFailures;
+            dest.ConsecutiveRewards = source.ConsecutiveRewards;
+            dest.TotalFailures = source.TotalFailures;
+            dest.TotalRewards = source.TotalRewards;
+            dest.TotalUploads = source.TotalUploads;
         }
 
-        private StationState GetChargingStationByRole(RoleType role)
+        private IReadOnlyList<ActionType> GetValidActions()
         {
-            var station = this.State.ChargingStations.FirstOrDefault(l => l.RoleParams?.Role == role);
-            if (station == null)
+            if (this.state.CurrentLocation == LocationType.None)
             {
-                throw new InvalidOperationException($"{role} role not found in any location");
+                // The rover is currently in transit between stations, so no actions are valid.
+                return new ActionType[] { };
             }
 
+            var currentStation = this.GetCurrentStation();
+
+            var actions = new List<ActionType>();
+
+            //Only allow navigation to other stations if the current station's accumulator is empty (the player needs to upload to avoid losing the rewards)
+            if (currentStation.Accumulator > 0)
+            {
+                if (this.state.CurrentLocation != LocationType.Station1)
+                {
+                    actions.Add(ActionType.GoToStation1);
+                }
+
+                if (this.state.CurrentLocation != LocationType.Station2)
+                {
+                    actions.Add(ActionType.GoToStation2);
+                }
+
+                //Note: Start location is always the last station in the list and counts as +1
+                if (this.state.ChargingStations.Count > 3)
+                {
+                    if (this.state.CurrentLocation != LocationType.Station3)
+                    {
+                        actions.Add(ActionType.GoToStation3);
+                    }
+                }
+
+                if (this.state.ChargingStations.Count > 4)
+                {
+                    if (this.state.CurrentLocation != LocationType.Station4)
+                    {
+                        actions.Add(ActionType.GoToStation4);
+                    }
+                }
+            }
+
+            if (this.state.CurrentLocation != LocationType.Start && currentStation.RoleParams != null)
+            {
+                if (currentStation.RoleParams.Id != RoleType.Depleted)
+                {
+                    actions.Add(ActionType.Extract);
+                }
+
+                //if the accumulator has nothing there is no point to upload nothing and lose energy!
+                if (currentStation.Accumulator > 0f)
+                {
+                    actions.Add(ActionType.Upload);
+                }
+            }
+
+            return actions;
+        }
+
+        private IChargingStationController GetChargingStationController(LocationType location)
+        {
+            if (!this.isInitialized || this.chargingStationControllers == null)
+            {
+                throw new InvalidOperationException("Controllers are not initialized.");
+            }
+
+            var stationController = this.chargingStationControllers.FirstOrDefault(x => x.Location == location);
+            if (stationController == null)
+            {
+                throw new InvalidOperationException($"Charging station controller for {location} not found.", null);
+            }
+
+            return stationController;
+        }
+
+        private StationState GetCurrentStation()
+        {
+            var station = this.state.ChargingStations.First(x => x.Location == this.state.CurrentLocation);
             return station;
-        }
-
-        private RoleType[] GetShuffleRoles()
-        {
-            var roles = Enum.GetValues(typeof(RoleType)).Cast<RoleType>().ToList();
-
-            for (var i = roles.Count - 1; i > 0; i--)
-            {
-                var j = this.Random.Next(i + 1);
-                var tmp = roles[i];
-                roles[i] = roles[j];
-                roles[j] = tmp;
-            }
-
-            return roles.ToArray();
         }
     }
 }

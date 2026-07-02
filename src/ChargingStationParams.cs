@@ -8,12 +8,19 @@ namespace BringMIPHome.Simulation
 
         public float AccumulatorInitialValue { get; set; } = 0;
 
+        /// <summary>
+        /// Ordered sequences of access points (Unity) used to navigate to different station areas.
+        /// </summary>
         public List<StationAccessSequence> StationAccessSequences { get; set; } = new List<StationAccessSequence>();
 
-        //TODO
-        public SimVector3 SetupPosition { get; set; }
+        /// <summary>
+        /// World position of the charging station in Unity space.
+        /// </summary>
+        public SimVector3 Position { get; set; }
 
-        //TODO
-        public float SetupAngle { get; set; }
+        /// <summary>
+        /// Y-axis rotation (heading) of the station in degrees.
+        /// </summary>
+        public float Heading { get; set; }
     }
 }

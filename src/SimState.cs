@@ -4,19 +4,20 @@ namespace BringMIPHome.Simulation
     using System.Collections.Generic;
     using System.Linq;
 
+    public class RoverState
+    {
+        
+    }
+    
     public class SimState
     {
-        public float Energy => this.Batteries.Where(b => !b.IsDetached).Sum(b => b.Energy);
-
         public float TimeLeft { get; set; }
 
         public List<RoverBattery> Batteries { get; set; } = new List<RoverBattery>();
 
-        public LocationType CurrentLocation { get; set; }
+        public LocationType CurrentLocation { get; set; } = 0;
 
-        public StationState CurrentChargingStation => this.ChargingStations.FirstOrDefault(l => l.Location == this.CurrentLocation);
-
-        public DoneReasonType Done { get; set; }
+        public DoneReasonType DoneReason { get; set; }
 
         public List<StationState> ChargingStations { get; set; } = new List<StationState>();
 
@@ -39,7 +40,7 @@ namespace BringMIPHome.Simulation
 
             this.TimeLeft = source.TimeLeft;
             this.CurrentLocation = source.CurrentLocation;
-            this.Done = source.Done;
+            this.DoneReason = source.DoneReason;
 
             // Deep copy primitive collections explicitly
             this.Batteries = source.Batteries.Select(b => new RoverBattery

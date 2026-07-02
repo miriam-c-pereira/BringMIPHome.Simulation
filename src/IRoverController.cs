@@ -2,6 +2,7 @@ namespace BringMIPHome.Simulation
 {
     public interface IRoverController
     {
-        void NavigateToStation(StationAccessSequence sequence);
+        void Initialize(ISimulationHost host);
+        void StartNavigation(StationAccessSequence sequence);
     }
 }

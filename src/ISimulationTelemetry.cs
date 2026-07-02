@@ -1,13 +1,20 @@
 namespace BringMIPHome.Simulation
 {
     using System.Collections.Generic;
+    using System.ComponentModel;
 
-    public interface ISimulationTelemetry
+    public interface ISimulationTelemetry : INotifyPropertyChanged
     {
-        float TotalEnergy { get; }
         float TimeLeft { get; }
-        LocationType CurrentLocation { get; }
+
         DoneReasonType DoneReason { get; }
-        IReadOnlyList<RoverBattery> Batteries { get; }
+
+        IRoverTelemetry Rover { get; }
+
+        ActionType CurrentAction { get; }
+
+        IStationTelemetry CurrentStation { get; }
+
+        IReadOnlyList<ActionType> ValidActions { get; }
     }
 }

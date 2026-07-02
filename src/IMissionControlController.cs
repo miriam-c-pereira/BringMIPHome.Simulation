@@ -4,7 +4,7 @@ namespace BringMIPHome.Simulation
 
     public interface IMissionControlController
     {
+        void Initialize(ISimulationHost host);
         void ConsoleMessage(string message, IDictionary<string, object> properties);
-        void UpdateTelemetryUI(SimulationHost simHost);
     }
 }

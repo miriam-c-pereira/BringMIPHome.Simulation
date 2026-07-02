@@ -1,26 +1,29 @@
 namespace BringMIPHome.Simulation
 {
-    public enum RoleReassignmentRule
-    {
-        LocalRotation,
-        Random,
-    }
+    //public enum RoleReassignmentRule
+    //{
+    //    LocalRotation,
+    //    Random,
+    //}
 
-    public enum RoleType
+    public static class RoleType
     {
-        Jackpot,
-        BreadCrumb,
-        Depleted
+        public const int Depleted = 0;
+        public const int BreadCrumb = 1;
+        public const int Jackpot = 2;
+        public const int Super = 3;
     }
 
     public enum LocationType
     {
-        None,
-        Start,
-        Station1,
-        Station2,
-        Station3,
-        Station4,
+        None = -1,
+
+        Station1 = 0,
+        Station2 = 1,
+        Station3 = 2,
+        Station4 = 3,
+
+        Start = 100,
     }
 
     public enum ActionType
