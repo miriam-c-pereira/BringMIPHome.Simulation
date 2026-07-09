@@ -9,16 +9,16 @@ namespace BringMIPHome.Simulation
     {
         public event PropertyChangedEventHandler PropertyChanged = (sender, args) => { };
 
-        public SimulationTelemetry(RoverTelemetry roverTelemetry, StationTelemetry stationTelemetry)
-        {
-            this.rover = roverTelemetry ?? new RoverTelemetry();
-            this.currentStation = stationTelemetry ?? new StationTelemetry();
-        }
+        //public SimulationTelemetry(RoverTelemetry roverTelemetry, StationTelemetry stationTelemetry)
+        //{
+        //    this.rover = roverTelemetry ?? new RoverTelemetry();
+        //    this.currentStation = stationTelemetry ?? new StationTelemetry();
+        //}
 
-        internal readonly RoverTelemetry rover;
+        internal RoverTelemetry rover;
         public IRoverTelemetry Rover => this.rover;
 
-        internal readonly StationTelemetry currentStation;
+        internal StationTelemetry currentStation;
         public IStationTelemetry CurrentStation => this.currentStation;
 
         private void Notify(string propertyName)

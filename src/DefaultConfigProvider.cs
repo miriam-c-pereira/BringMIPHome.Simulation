@@ -14,6 +14,86 @@ namespace BringMIPHome.Simulation
             };
         }
         
+        
+        public SimUiConfig GetSimUiConfig()
+        {
+            return new SimUiConfig()
+            {
+                Locations = new List<LocationUiConfig>
+                {
+                    new LocationUiConfig
+                    {
+                        Location = LocationType.Station1,
+                        DisplayName = "1",
+                        Position = new SimVector3(0, 0, 20),
+                        //180
+                        Rotation = new SimVector3(0, -180, 0),
+                    },
+                    new LocationUiConfig
+                    {
+                        Location = LocationType.Station2,
+                        DisplayName = "2",
+                        Position = new SimVector3(17.32f, 0, -10),
+                        //300
+                        Rotation = new SimVector3(0, -60, 0),
+                    },
+                    new LocationUiConfig
+                    {
+                        Location = LocationType.Station3,
+                        DisplayName = "3",
+                        Position = new SimVector3(17.32f, 0, -10),
+                        //60
+                        Rotation = new SimVector3(0, 60, 0),
+                    },
+
+                    new LocationUiConfig
+                    {
+                        Location = LocationType.Start,
+                        DisplayName = "Start",
+                        Position = new SimVector3(17.32f, 0, -10),
+                        //60
+                        Rotation = new SimVector3(0, 60, 0),
+
+                        NavigationRoutes = new List<NavigationRoute>
+                        {
+                            new NavigationRoute
+                            {
+                                TargetLocation = LocationType.Station1,
+                                Steps = new List<NavigationStep>
+                                {
+                                    new OrientationStep { Angle = 90 },
+                                    new WaypointStep { Destination = new SimVector3(17f, 0.5f, 0f) },
+                                    new OrientationStep { Angle = 90 },
+                                }
+                            },
+                            new NavigationRoute
+                            {
+                                TargetLocation = LocationType.Station2,
+                                Steps = new List<NavigationStep>
+                                {
+                                    new OrientationStep { Angle = 210f },
+                                    new WaypointStep { Destination = new SimVector3(-8.5f, 0.5f, -14.72f) },
+                                    new OrientationStep { Angle = 210f },
+                                }
+                            },
+                            new NavigationRoute
+                            {
+                                TargetLocation = LocationType.Station3,
+                                Steps = new List<NavigationStep>
+                                {
+                                    new OrientationStep { Angle = 330f },
+                                    new WaypointStep { Destination = new SimVector3(-8.5f, 0.5f, 14.72f) },
+                                    new OrientationStep { Angle = 330f },
+                                }
+                            }
+                        }
+
+                    },
+
+                }
+            };
+        }
+
         public SimConfig GetSimConfig()
         {
             return new SimConfig
@@ -62,164 +142,23 @@ namespace BringMIPHome.Simulation
                     {
                         Location = LocationType.Station1,
                         AccumulatorInitialValue = 0,
-                        //TODO
-                        //Position = new SimVector3(),
-                        //Heading = ,
-                        StationAccessSequences = new List<StationAccessSequence>
-                        {
-                            new StationAccessSequence
-                            {
-                                Location = LocationType.Station1,
-                                Steps = new List<NavigationStep>
-                                {
-                                    new OrientationStep { Angle = 90 },
-                                    new WaypointStep { Destination = new SimVector3(17f, 0.5f, 0f) },
-                                    new OrientationStep { Angle = 90 },
-                                },
-                            },
-                            new StationAccessSequence
-                            {
-                                Location = LocationType.Station2,
-                                Steps = new List<NavigationStep>
-                                {
-                                    new OrientationStep { Angle = 210f },
-                                    new WaypointStep { Destination = new SimVector3(-8.5f, 0.5f, -14.72f) },
-                                    new OrientationStep { Angle = 210f },
-                                }
-                            },
-                            new StationAccessSequence
-                            {
-                                Location = LocationType.Station3,
-                                Steps = new List<NavigationStep>
-                                {
-                                    new OrientationStep { Angle = 330f },
-                                    new WaypointStep { Destination = new SimVector3(-8.5f, 0.5f, 14.72f) },
-                                    new OrientationStep { Angle = 330f },
-                                }
-                            }
-                        }
+                        
                     },
                     new ChargingStationParams
                     {
                         Location = LocationType.Station2,
                         AccumulatorInitialValue = 0,
-                        //TODO
-                        //Position = new SimVector3(),
-                        //Heading = ,
-
-                        StationAccessSequences = new List<StationAccessSequence>
-                        {
-                            new StationAccessSequence
-                            {
-                                Location = LocationType.Station1,
-                                Steps = new List<NavigationStep>
-                                {
-                                    new OrientationStep { Angle = 90 },
-                                    new WaypointStep { Destination = new SimVector3(17f, 0.5f, 0f) },
-                                    new OrientationStep { Angle = 90 },
-                                }
-                            },
-                            new StationAccessSequence
-                            {
-                                Location = LocationType.Station2,
-                                Steps = new List<NavigationStep>
-                                {
-                                    new OrientationStep { Angle = 210f },
-                                    new WaypointStep { Destination = new SimVector3(-8.5f, 0.5f, -14.72f) },
-                                    new OrientationStep { Angle = 210f },
-                                }
-                            },
-                            new StationAccessSequence
-                            {
-                                Location = LocationType.Station3,
-                                Steps = new List<NavigationStep>
-                                {
-                                    new OrientationStep { Angle = 330f },
-                                    new WaypointStep { Destination = new SimVector3(-8.5f, 0.5f, 14.72f) },
-                                    new OrientationStep { Angle = 330f },
-                                }
-                            }
-                        }
                     },
                     new ChargingStationParams
                     {
                         Location = LocationType.Station3,
                         AccumulatorInitialValue = 0,
-                        //TODO
-                        //Position = new SimVector3(),
-                        //Heading = ,
-                        StationAccessSequences = new List<StationAccessSequence>
-                        {
-                            new StationAccessSequence
-                            {
-                                Location = LocationType.Station1,
-                                Steps = new List<NavigationStep>
-                                {
-                                    new OrientationStep { Angle = 90 },
-                                    new WaypointStep { Destination = new SimVector3(17f, 0.5f, 0f) },
-                                    new OrientationStep { Angle = 90 },
-                                }
-                            },
-                            new StationAccessSequence
-                            {
-                                Location = LocationType.Station2,
-                                Steps = new List<NavigationStep>
-                                {
-                                    new OrientationStep { Angle = 210f },
-                                    new WaypointStep { Destination = new SimVector3(-8.5f, 0.5f, -14.72f) },
-                                    new OrientationStep { Angle = 210f },
-                                }
-                            },
-                            new StationAccessSequence
-                            {
-                                Location = LocationType.Station3,
-                                Steps = new List<NavigationStep>
-                                {
-                                    new OrientationStep { Angle = 330f },
-                                    new WaypointStep { Destination = new SimVector3(-8.5f, 0.5f, 14.72f) },
-                                    new OrientationStep { Angle = 330f },
-                                }
-                            },
-                        }
                     },
 
                     new ChargingStationParams
                     {
                         Location = LocationType.Start,
                         AccumulatorInitialValue = 0,
-                        StationAccessSequences = new List<StationAccessSequence>
-                        {
-                            new StationAccessSequence
-                            {
-                                Location = LocationType.Station1,
-                                Steps = new List<NavigationStep>
-                                {
-                                    new OrientationStep { Angle = 90 },
-                                    new WaypointStep { Destination = new SimVector3(17f, 0.5f, 0f) },
-                                    new OrientationStep { Angle = 90 },
-                                }
-                            },
-                            new StationAccessSequence
-                            {
-                                Location = LocationType.Station2,
-                                Steps = new List<NavigationStep>
-                                {
-                                    new OrientationStep { Angle = 210f },
-                                    new WaypointStep { Destination = new SimVector3(-8.5f, 0.5f, -14.72f) },
-                                    new OrientationStep { Angle = 210f },
-                                }
-                            },
-                            new StationAccessSequence
-                            {
-                                Location = LocationType.Station3,
-                                Steps = new List<NavigationStep>
-                                {
-                                    new OrientationStep { Angle = 330f },
-                                    new WaypointStep { Destination = new SimVector3(-8.5f, 0.5f, 14.72f) },
-                                    new OrientationStep { Angle = 330f },
-                                }
-                            }
-                        }
                     },
                 },
             };

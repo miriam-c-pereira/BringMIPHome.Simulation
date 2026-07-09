@@ -3,6 +3,30 @@ namespace BringMIPHome.Simulation
     using System;
     using System.Collections.Generic;
 
+    //public abstract class NotifyActionCompleteArgs
+    //{
+    //    public ActionType Action { get; set; }
+    //    public bool IsSuccess { get; set; }
+    //}
+    
+    //public class RoverActionCompleteArgs : NotifyActionCompleteArgs
+    //{
+    //}
+
+    //public class StationActionCompleteArgs : NotifyActionCompleteArgs
+    //{
+    //}
+
+    public interface IController
+    {
+        
+    }
+
+    public abstract class SimEventArgs : EventArgs
+    {
+    }
+
+
     public interface ISimulationHost
     {
         /// <summary>
@@ -10,17 +34,7 @@ namespace BringMIPHome.Simulation
         /// </summary>
         ISimulationTelemetry Telemetry { get; }
 
-        /// <summary>
-        /// Raised when the currently executing action has completed.
-        /// </summary>
-        event Action<ActionEvent> ActionCompleted;
-
-        /// <summary>
-        /// Raised when the simulation ends.
-        /// This may occur because the mission objective was achieved,
-        /// the rover ran out of energy, or the simulation time expired.
-        /// </summary>
-        event Action<DoneEvent> SimulationCompleted;
+        event EventHandler<SimulationEvent> SimulationEvent;
 
         /// <summary>
         /// Advances the simulation by the specified time.
@@ -33,12 +47,12 @@ namespace BringMIPHome.Simulation
         /// </summary>
         bool TryStartAction(ActionType action);
 
-        /// <summary>
-        /// Notifies the simulation that the previously requested action
-        /// has finished executing.
-        /// This is typically called by the rover or station controller.
-        /// </summary>
-        void NotifyActionCompleted();
+        ///// <summary>
+        ///// Notifies the simulation that the previously requested action
+        ///// has finished executing.
+        ///// This is typically called by the rover or station controller.
+        ///// </summary>
+        //void NotifyActionCompleted(NotifyActionCompleteArgs args);
 
         void InitializeControllers(IRoverController rover, IEnumerable<IChargingStationController> chargingStations, IMissionControlController missionControl);
     }

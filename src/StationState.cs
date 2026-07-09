@@ -36,7 +36,7 @@ namespace BringMIPHome.Simulation
             this.Location = chargingStationParams.Location;
             this.ChargingStationParams = chargingStationParams;
 
-            // Can be null if Location is Location.Start
+            // Can be null if TargetLocation is TargetLocation.Start
             this.RoleParams = roleParams;
 
             this.Accumulator = chargingStationParams.AccumulatorInitialValue;

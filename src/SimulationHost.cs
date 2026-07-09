@@ -9,16 +9,15 @@ namespace BringMIPHome.Simulation
     {
         public ISimulationTelemetry Telemetry => this.telemetry;
 
-        public event Action<ActionEvent> ActionCompleted = (e) => { };
-
-        public event Action<DoneEvent> SimulationCompleted = (e) => { };
+        public event EventHandler<SimulationEvent>? SimulationEvent;
 
         private readonly ChargingStationAnimationConfig chargingStationAnimationConfig;
         private readonly SimConfig config;
+        private readonly SimUiConfig simUiConfig;
         private readonly Random random;
         private readonly SimState state;
         private readonly SimulationTelemetry telemetry;
-        private ActionType executingAction = ActionType.None;
+        private ActionType currentAction = ActionType.None;
         private SimState stateBeforeAction = new SimState();
         private readonly PermutationGenerator permutationGenerator;
         private ExtractionOutcome? lastExtractionOutcome;
@@ -29,7 +28,7 @@ namespace BringMIPHome.Simulation
         private IEnumerable<IChargingStationController>? chargingStationControllers;
         private IMissionControlController? missionControlController;
 
-        public SimulationHost(SimConfig simConfig, ChargingStationAnimationConfig animConfig)
+        public SimulationHost(SimConfig simConfig, SimUiConfig simUiConfig, ChargingStationAnimationConfig animConfig)
         {
             if (simConfig == null)
             {
@@ -42,8 +41,7 @@ namespace BringMIPHome.Simulation
             EnsureConfigIsValid(simConfig);
 
             this.config = simConfig;
-
-            this.telemetry = new SimulationTelemetry(new RoverTelemetry(), new StationTelemetry());
+            this.simUiConfig = simUiConfig;
 
             this.random = this.config.RandomSeed != null
                 ? new Random(this.config.RandomSeed.Value)
@@ -51,17 +49,10 @@ namespace BringMIPHome.Simulation
 
             this.permutationGenerator = new PermutationGenerator(this.random, this.config.Roles.Count);
 
-            this.state = new SimState
+            var batteries = new List<RoverBattery>
             {
-                Batteries = new List<RoverBattery>
-                {
-                    new RoverBattery { Id = 1, Energy = this.config.EnergyInit / 2 },
-                    new RoverBattery { Id = 2, Energy = this.config.EnergyInit / 2 },
-                },
-                TimeLeft = this.config.TimeInit,
-                CurrentLocation = LocationType.Start,
-                DoneReason = DoneReasonType.NotDone,
-                ChargingStations = new List<StationState>()
+                new RoverBattery { Id = 1, Energy = this.config.EnergyInit / 2.0f },
+                new RoverBattery { Id = 2, Energy = this.config.EnergyInit / 2.0f },
             };
 
             // Generate a random assignment of role IDs to station indices.
@@ -73,6 +64,7 @@ namespace BringMIPHome.Simulation
             //   CurrentStation 2 -> Role 2
             var stationRoleIds = this.permutationGenerator.GetRandomCombination();
 
+            var chargingStations = new List<StationState>();
             // Assign roles to all charging stations except
             // the Start location (the final charging station), as it is not assigned a role. 
             for (var index = 0; index < this.config.ChargingStations.Count - 1; index++)
@@ -80,9 +72,46 @@ namespace BringMIPHome.Simulation
                 var chargingStationParams = this.config.ChargingStations[index];
 
                 var roleParams = this.config.Roles.First(x => x.Id == stationRoleIds[index]);
-                this.state.ChargingStations.Add(new StationState(chargingStationParams, roleParams!));
+                chargingStations.Add(new StationState(chargingStationParams, roleParams!));
             }
+
+            //add the Start location as the last station in the list, with no role assigned
+            chargingStations.Add(new StationState(this.config.ChargingStations.Last(), null));
+
+            var simState = new SimState
+            {
+                Batteries = batteries,
+                TimeLeft = this.config.TimeInit,
+                CurrentLocation = LocationType.Start,
+                DoneReason = DoneReasonType.NotDone,
+                ChargingStations = chargingStations,
+            };
+
+            this.state = simState;
+
+            var currentStation = this.GetCurrentStation();
+
+            this.telemetry = new SimulationTelemetry
+            {
+                TimeLeft = this.state.TimeLeft,
+                DoneReason = this.state.DoneReason,
+                ValidActions = this.GetValidActions(),
+                CurrentAction = this.currentAction,
+                rover = new RoverTelemetry
+                {
+                    LeftBatteryIsDetached = this.state.Batteries[0].IsDetached,
+                    LeftBatteryEnergy = this.state.Batteries[0].Energy,
+                    RightBatteryIsDetached = this.state.Batteries[1].IsDetached,
+                    RightBatteryEnergy = this.state.Batteries[1].Energy,
+                },
+                currentStation = new StationTelemetry
+                {
+                    Location = currentStation.Location,
+                    Accumulator = currentStation.Accumulator,
+                }
+            };
         }
+
 
         public void InitializeControllers(IRoverController rover, IEnumerable<IChargingStationController> chargingStations, IMissionControlController missionControl)
         {
@@ -96,13 +125,22 @@ namespace BringMIPHome.Simulation
             this.chargingStationControllers = chargingStations ?? throw new ArgumentNullException(nameof(chargingStations));
 
             this.missionControlController.Initialize(this);
-            this.roverController.Initialize(this);
-            foreach (var chargingStationController in this.chargingStationControllers)
-            {
-                chargingStationController.Initialize(this, this.chargingStationAnimationConfig);
-            }
 
             this.isInitialized = true;
+
+            this.roverController.RoverEvent += this.OnRoverEvent;
+            this.roverController.Initialize(this);
+
+            foreach (var chargingStationController in this.chargingStationControllers)
+            {
+                var locationUiConfig = this.simUiConfig.Locations.FirstOrDefault(x => x.Location == chargingStationController.Location);
+                if (locationUiConfig == null)
+                {
+                    throw new InvalidOperationException($"Location UI config for {chargingStationController.Location} not found.");
+                }
+                chargingStationController.ChargingStationEvent += OnChargingStationEvent;
+                chargingStationController.Initialize(this, locationUiConfig, this.chargingStationAnimationConfig);
+            }
         }
 
 
@@ -117,7 +155,7 @@ namespace BringMIPHome.Simulation
                 this.telemetry.DoneReason = this.state.DoneReason;
                 this.telemetry.ValidActions = this.GetValidActions();
 
-                this.SimulationCompleted?.Invoke(new DoneEvent
+                this.SimulationEvent?.Invoke(this, new DoneEvent
                 {
                     Done = this.state.DoneReason,
                     TotalEnergy = this.telemetry.Rover.TotalBatteryEnergy,
@@ -149,28 +187,122 @@ namespace BringMIPHome.Simulation
 
             this.telemetry.ValidActions = Array.Empty<ActionType>();
 
+            this.currentAction = action;
+            this.telemetry.CurrentAction = this.currentAction;
+
             this.ExecuteAction(action, true);
 
             return true;
         }
 
 
-        public void NotifyActionCompleted()
+
+
+        private void OnChargingStationEvent(object sender, ChargingStationEvent e)
         {
             if (!this.isInitialized)
             {
                 throw new InvalidOperationException("Controllers are not initialized.");
             }
 
-            this.ExecuteAction(this.executingAction, false);
+            switch (e)
+            {
+                case ExtractionStartedEvent extractionStartedEvent:
+                    break;
+
+                case ExtractionStoppedEvent extractionStoppedEvent:
+                    this.NotifyActionCompleted(ActionType.Extract, sender as IController);
+                    break;
+
+                case UploadingStartedEvent uploadingStartedEvent:
+                    break;
+
+                case UploadingStoppedEvent uploadingStoppedEvent:
+                    this.NotifyActionCompleted(ActionType.Upload, sender as IController);
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+        private void OnRoverEvent(object sender, RoverEvent e)
+        {
+            if (!this.isInitialized)
+            {
+                throw new InvalidOperationException("Controllers are not initialized.");
+            }
+
+            switch (e)
+            {
+                case NavigationStartedEvent navigationStartedEvent:
+                    break;
+
+                case NavigationStoppedEvent navigationStoppedEvent:
+                    
+                    ActionType gotoAction;
+                    switch (navigationStoppedEvent.Args.NavigationRoute.TargetLocation)
+                    {
+                        case LocationType.Station1:
+                            gotoAction = ActionType.GoToStation1;
+                            break;
+                        
+                        case LocationType.Station2:
+                            gotoAction = ActionType.GoToStation2;
+                            break;
+                        
+                        case LocationType.Station3:
+                            gotoAction = ActionType.GoToStation3;
+                            break;
+                        
+                        case LocationType.Station4:
+                            gotoAction = ActionType.GoToStation4;
+                            break;
+                        
+                        default:
+                            throw new InvalidOperationException("Invalid navigation target location.");
+                    }
+                    
+                    this.NotifyActionCompleted(gotoAction, sender as IController);
+                    break;
+
+                case PositionUpdatedEvent positionUpdatedEvent:
+                    this.telemetry.rover.Position = positionUpdatedEvent.Position;
+                    this.telemetry.rover.LinearVelocity = positionUpdatedEvent.Velocity;
+                    break;
+
+                case RotationUpdatedEvent rotationUpdatedEvent:
+                    this.telemetry.rover.Heading = rotationUpdatedEvent.Heading;
+                    //this.telemetry.rover.AngularVelocity = rotationUpdatedEvent.AngularVelocity;
+                    break;
+
+                default:
+                    break;
+            }
+        }
+
+
+        private void NotifyActionCompleted(ActionType action, IController? controller)
+        {
+            if (!this.isInitialized)
+            {
+                throw new InvalidOperationException("Controllers are not initialized.");
+            }
+
+            if (action != this.currentAction)
+            {
+                throw new InvalidOperationException($"Expected action {this.currentAction}, but received completion for {action}");
+            }
+
+            this.ExecuteAction(this.currentAction, false);
 
             var after = this.state.GetSnapshot();
 
-            var gameEvent = new ActionEvent(this.stateBeforeAction, this.executingAction, after);
+            var actionEvent = new ActionEvent(this.stateBeforeAction, this.currentAction, after);
 
-            this.ActionCompleted?.Invoke(gameEvent);
+            this.SimulationEvent?.Invoke(this, actionEvent);
 
-            this.executingAction = ActionType.None;
+            this.currentAction = ActionType.None;
 
             //Note: avoid firing twice if the simulation is already done (TimeExpired)
             if (this.state.DoneReason == DoneReasonType.NotDone)
@@ -188,7 +320,7 @@ namespace BringMIPHome.Simulation
 
                 if (this.state.DoneReason != DoneReasonType.NotDone)
                 {
-                    this.SimulationCompleted?.Invoke(new DoneEvent
+                    this.SimulationEvent?.Invoke(this, new DoneEvent
                     {
                         Done = this.telemetry.DoneReason,
                         TotalEnergy = this.telemetry.Rover.TotalBatteryEnergy,
@@ -204,24 +336,25 @@ namespace BringMIPHome.Simulation
         }
 
 
+
         private void ExecuteAction(ActionType action, bool isStarting)
         {
             switch (action)
             {
                 case ActionType.GoToStation1:
-                    this.ExecuteGoto(LocationType.Station1, isStarting);
+                    this.ExecuteGoto(ActionType.GoToStation1, isStarting, LocationType.Station1);
                     break;
 
                 case ActionType.GoToStation2:
-                    this.ExecuteGoto(LocationType.Station2, isStarting);
+                    this.ExecuteGoto(ActionType.GoToStation2, isStarting, LocationType.Station2);
                     break;
 
                 case ActionType.GoToStation3:
-                    this.ExecuteGoto(LocationType.Station3, isStarting);
+                    this.ExecuteGoto(ActionType.GoToStation3, isStarting, LocationType.Station3);
                     break;
 
                 case ActionType.GoToStation4:
-                    this.ExecuteGoto(LocationType.Station4, isStarting);
+                    this.ExecuteGoto(ActionType.GoToStation4, isStarting, LocationType.Station4);
                     break;
 
                 case ActionType.Extract:
@@ -237,7 +370,7 @@ namespace BringMIPHome.Simulation
             }
         }
 
-        private void ExecuteGoto(LocationType newLocation, bool starting)
+        private void ExecuteGoto(ActionType action, bool starting, LocationType newLocation)
         {
             if (starting)
             {
@@ -258,19 +391,25 @@ namespace BringMIPHome.Simulation
 
                 UpdateStationTelemetry(this.telemetry.currentStation, new StationState());
 
-                var stationAccessSequence = departingStation.ChargingStationParams?.StationAccessSequences.FirstOrDefault(l => l.Location == newLocation);
-                if (stationAccessSequence != null)
+                var locationUiConfig = this.simUiConfig.Locations.FirstOrDefault(x => x.Location == departingStation.Location);
+                if (locationUiConfig == null)
+                {
+                    throw new InvalidOperationException($"No LocationUiConfig available for {departingStation.Location}.");
+                }
+
+                var navigationRoute = locationUiConfig.NavigationRoutes?.FirstOrDefault(l => l.TargetLocation == newLocation);
+                if (navigationRoute != null)
                 {
                     if (this.roverController == null)
                     {
                         throw new InvalidOperationException("Rover controller is not initialized.");
                     }
 
-                    this.roverController.StartNavigation(stationAccessSequence);
+                    this.roverController.StartAction(action, new RoverGotoArgs { NavigationRoute = navigationRoute });
                 }
                 else
                 {
-                    throw new InvalidOperationException($"No StationAccessSequences available to {newLocation}.");
+                    throw new InvalidOperationException($"No NavigationRoute available to {newLocation}.");
                 }
             }
             else
@@ -291,8 +430,8 @@ namespace BringMIPHome.Simulation
             if (starting)
             {
                 var stationController = this.GetChargingStationController(currentStation.Location);
-                var args = new StationUploadArgs { ConsecutiveRewards = currentStation.ConsecutiveRewards };
-                stationController.StartUpload(args);
+                var args = new UploadingArgs { ConsecutiveRewards = currentStation.ConsecutiveRewards };
+                stationController.StartAction(ActionType.Upload, args);
             }
             else
             {
@@ -319,13 +458,13 @@ namespace BringMIPHome.Simulation
                 this.lastExtractionOutcome = this.GetExtractionOutcome(currentStation);
 
                 var stationController = this.GetChargingStationController(currentStation.Location);
-                var args = new StationExtractionArgs
+                var args = new ExtractionArgs
                 {
                     Accumulator = this.lastExtractionOutcome.ExtractedAmount,
                     ConsecutiveRewards = this.lastExtractionOutcome.ConsecutiveRewards,
                     ConsecutiveFailures = this.lastExtractionOutcome.ConsecutiveFailures,
                 };
-                stationController.StartExtraction(args);
+                stationController.StartAction(ActionType.Extract, args);
             }
             else
             {
@@ -395,7 +534,6 @@ namespace BringMIPHome.Simulation
             }
 
             extractionOutcome.BecameDepleted = this.random.NextDouble() < station.RoleParams.DepletionSwitchProbability;
-
 
 
             return extractionOutcome;
@@ -494,9 +632,9 @@ namespace BringMIPHome.Simulation
             for (var lx = 0; lx < config.ChargingStations.Count - 1; lx++)
             {
                 var loc = (LocationType)lx; //0 - > Station1, 1 -> Station2, 2 -> Station3, 3 -> Station4
-                if (config.ChargingStations[lx].Location == loc)
+                if (config.ChargingStations[lx].Location != loc)
                 {
-                    throw new Exception($"Location {loc} not found.");
+                    throw new Exception($"TargetLocation {loc} not found.");
                 }
             }
 
@@ -516,7 +654,7 @@ namespace BringMIPHome.Simulation
             // Validate that role IDs are unique and sequential, starting at 0 with no gaps or duplicates
             for (var rx = 0; rx < config.Roles.Count; rx++)
             {
-                if (config.Roles[rx].Id == rx)
+                if (config.Roles[rx].Id != rx)
                 {
                     throw new Exception($"Role {rx} not found.");
                 }

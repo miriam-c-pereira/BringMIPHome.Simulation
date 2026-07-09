@@ -1,6 +1,13 @@
 namespace BringMIPHome.Simulation
 {
-    public class DoneEvent
+    using System;
+
+    public abstract class SimulationEvent : SimEventArgs
+    {
+
+    }
+
+    public class DoneEvent : SimulationEvent
     {
         public DoneReasonType Done { get; set; }
 
@@ -9,7 +16,7 @@ namespace BringMIPHome.Simulation
         public float TimeLeft { get; set; }
     }
 
-    public class ActionEvent
+    public class ActionEvent : SimulationEvent
     {
         public ActionType Action { get; private set; }
         public SimState Before { get; private set; }
