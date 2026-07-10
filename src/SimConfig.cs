@@ -3,7 +3,6 @@ namespace BringMIPHome.Simulation
     using System;
     using System.Collections.Generic;
 
-
     [Serializable]
     public class SimConfig
     {
@@ -19,15 +18,18 @@ namespace BringMIPHome.Simulation
         public float UploadEnergyCost { get; set; }
         public int UploadTimeCost { get; set; }
 
+        public float? TargetEnergy { get; set; }
+
+        public int? RandomSeed { get; set; }
+
+        public bool AllowFixAction { get; set; }
+
+        public bool AllowDetachBattery { get; set; }
+
+        public bool GuaranteeFirstStationNotDepleted { get; set; }
+
         public List<RoleParams> Roles { get; set; } = new List<RoleParams>();
-
-        public float? TargetEnergy = null;
-
-        public int? RandomSeed = null;
-
-        public List<ActionType> ExtraActionTypes { get; set; } = new List<ActionType>();
 
         public List<ChargingStationParams> ChargingStations { get; set; } = new List<ChargingStationParams>();
     }
-    
 }

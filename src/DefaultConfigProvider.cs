@@ -25,34 +25,56 @@ namespace BringMIPHome.Simulation
                     {
                         Location = LocationType.Station1,
                         DisplayName = "1",
-                        Position = new SimVector3(0, 0, 20),
-                        //180
-                        Rotation = new SimVector3(0, -180, 0),
+                        Position = new SimVector3(0, 0, 0),
+                        Rotation = new SimVector3(0, 0, 0),
+                        NavigationRoutes = new List<NavigationRoute>
+                        {
+                           
+                            new NavigationRoute
+                            {
+                                TargetLocation = LocationType.Station2,
+                                Steps = new List<NavigationStep>
+                                {
+                                    new OrientationStep { Angle = 180 },
+                                    new WaypointStep { Destination = new SimVector3(-20, 0, 0) },
+                                    new OrientationStep { Angle = 90 },
+                                    new WaypointStep { Destination = new SimVector3(10, 0, 0) },
+                                    new OrientationStep { Angle = 0 },
+                                    new WaypointStep { Destination = new SimVector3(10, 0, 10) },
+                                    new OrientationStep { Angle = 90 },
+                                    new WaypointStep { Destination = new SimVector3(20, 0, 10) },
+                                    new OrientationStep { Angle = 0 },
+                                    new WaypointStep { Destination = new SimVector3(20, 0, 20) },
+                                    new OrientationStep { Angle = 45 },
+                                }
+                            },
+                            new NavigationRoute
+                            {
+                                TargetLocation = LocationType.Station3,
+                                Steps = new List<NavigationStep>
+                                {
+                                    new OrientationStep { Angle = 180 },
+                                    new WaypointStep { Destination = new SimVector3(-20, 0, 0) },
+                                    new OrientationStep { Angle = 90 },
+                                    new WaypointStep { Destination = new SimVector3(0, 0, 0) },
+                                    new OrientationStep { Angle = 180 },
+                                    new WaypointStep { Destination = new SimVector3(0, 0, -20) },
+                                    new OrientationStep { Angle = 90 },
+                                    new WaypointStep { Destination = new SimVector3(20, 0, -20) },
+                                    new OrientationStep { Angle = 135 },
+                                }
+                            }
+                        }
                     },
+                    
+                    
                     new LocationUiConfig
                     {
                         Location = LocationType.Station2,
                         DisplayName = "2",
-                        Position = new SimVector3(17.32f, 0, -10),
-                        //300
-                        Rotation = new SimVector3(0, -60, 0),
-                    },
-                    new LocationUiConfig
-                    {
-                        Location = LocationType.Station3,
-                        DisplayName = "3",
-                        Position = new SimVector3(17.32f, 0, -10),
-                        //60
-                        Rotation = new SimVector3(0, 60, 0),
-                    },
+                        Position = new SimVector3(0, 0, 0),
+                        Rotation = new SimVector3(0, 0, 0),
 
-                    new LocationUiConfig
-                    {
-                        Location = LocationType.Start,
-                        DisplayName = "Start",
-                        Position = new SimVector3(17.32f, 0, -10),
-                        //60
-                        Rotation = new SimVector3(0, 60, 0),
 
                         NavigationRoutes = new List<NavigationRoute>
                         {
@@ -61,19 +83,17 @@ namespace BringMIPHome.Simulation
                                 TargetLocation = LocationType.Station1,
                                 Steps = new List<NavigationStep>
                                 {
-                                    new OrientationStep { Angle = 90 },
-                                    new WaypointStep { Destination = new SimVector3(17f, 0.5f, 0f) },
-                                    new OrientationStep { Angle = 90 },
-                                }
-                            },
-                            new NavigationRoute
-                            {
-                                TargetLocation = LocationType.Station2,
-                                Steps = new List<NavigationStep>
-                                {
-                                    new OrientationStep { Angle = 210f },
-                                    new WaypointStep { Destination = new SimVector3(-8.5f, 0.5f, -14.72f) },
-                                    new OrientationStep { Angle = 210f },
+                                    new OrientationStep { Angle = 180 },
+                                    new WaypointStep { Destination = new SimVector3(20, 0, 10) },
+                                    new OrientationStep { Angle = 270 },
+                                    new WaypointStep { Destination = new SimVector3(0, 0, 10) },
+                                    new OrientationStep { Angle = 180 },
+                                    new WaypointStep { Destination = new SimVector3(0, 0, 0) },
+                                    new OrientationStep { Angle = 270 },
+                                    new WaypointStep { Destination = new SimVector3(-20, 0, 0) },
+                                    new OrientationStep { Angle = 0 },
+                                    new WaypointStep { Destination = new SimVector3(-20, 0, 20) },
+                                    new OrientationStep { Angle = 315 },
                                 }
                             },
                             new NavigationRoute
@@ -81,9 +101,123 @@ namespace BringMIPHome.Simulation
                                 TargetLocation = LocationType.Station3,
                                 Steps = new List<NavigationStep>
                                 {
-                                    new OrientationStep { Angle = 330f },
-                                    new WaypointStep { Destination = new SimVector3(-8.5f, 0.5f, 14.72f) },
-                                    new OrientationStep { Angle = 330f },
+                                    new OrientationStep { Angle = 180 },
+                                    new WaypointStep { Destination = new SimVector3(20, 0, 10) },
+                                    new OrientationStep { Angle = 270 },
+                                    new WaypointStep { Destination = new SimVector3(0, 0, 10) },
+                                    new OrientationStep { Angle = 180 },
+                                    new WaypointStep { Destination = new SimVector3(0, 0, -10) },
+                                    new OrientationStep { Angle = 90 },
+                                    new WaypointStep { Destination = new SimVector3(20, 0, -10) },
+                                    new OrientationStep { Angle = 180 },
+                                    new WaypointStep { Destination = new SimVector3(20, 0, -20) },
+                                    new OrientationStep { Angle = 135 },
+                                }
+                            }
+
+                        }
+
+
+                    },
+                    
+                    
+                    
+                    
+                    new LocationUiConfig
+                    {
+                        Location = LocationType.Station3,
+                        DisplayName = "3",
+                        Position = new SimVector3(0, 0, 0),
+                        Rotation = new SimVector3(0, 0, 0),
+
+                        NavigationRoutes = new List<NavigationRoute>
+                        {
+                            new NavigationRoute
+                            {
+                                TargetLocation = LocationType.Station1,
+                                Steps = new List<NavigationStep>
+                                {
+                                    new OrientationStep { Angle = 270 },
+                                    new WaypointStep { Destination = new SimVector3(0, 0, -20) },
+                                    new OrientationStep { Angle = 0 },
+                                    new WaypointStep { Destination = new SimVector3(0, 0, 10) },
+                                    new OrientationStep { Angle = 270 },
+                                    new WaypointStep { Destination = new SimVector3(-20, 0, 10) },
+                                    new OrientationStep { Angle = 0 },
+                                    new WaypointStep { Destination = new SimVector3(-20, 0, 20) },
+                                    new OrientationStep { Angle = 315 },
+                                }
+                            },
+                            new NavigationRoute
+                            {
+                                TargetLocation = LocationType.Station2,
+                                Steps = new List<NavigationStep>
+                                {
+                                    new OrientationStep { Angle = 270 },
+                                    new WaypointStep { Destination = new SimVector3(0, 0, -20) },
+                                    new OrientationStep { Angle = 0 },
+                                    new WaypointStep { Destination = new SimVector3(0, 0, 10) },
+                                    new OrientationStep { Angle = 90 },
+                                    new WaypointStep { Destination = new SimVector3(20, 0, 10) },
+                                    new OrientationStep { Angle = 0 },
+                                    new WaypointStep { Destination = new SimVector3(20, 0, 20) },
+                                    new OrientationStep { Angle = 45 },
+                                }
+                            },
+                        }
+
+
+                    },
+
+                    new LocationUiConfig
+                    {
+                        Location = LocationType.Start,
+                        DisplayName = "Start",
+                        Position = new SimVector3(0, 0, 0),
+                        Rotation = new SimVector3(0, 0, 0),
+
+                        NavigationRoutes = new List<NavigationRoute>
+                        {
+                            new NavigationRoute
+                            {
+                                TargetLocation = LocationType.Station1,
+                                Steps = new List<NavigationStep>
+                                {
+                                    new OrientationStep { Angle = -90 },
+                                    new WaypointStep { Destination = new SimVector3(-20, 0, 0) },
+                                    new OrientationStep { Angle = 90 },
+                                    new WaypointStep { Destination = new SimVector3(-20, 0, 20) },
+                                    new OrientationStep { Angle = 315 },
+                                }
+                            },
+                            new NavigationRoute
+                            {
+                                TargetLocation = LocationType.Station2,
+                                Steps = new List<NavigationStep>
+                                {
+                                    new OrientationStep { Angle = 0 },
+                                    new WaypointStep { Destination = new SimVector3(0, 0, 10) },
+                                    new OrientationStep { Angle = 90 },
+                                    new WaypointStep { Destination = new SimVector3(20, 0, 10) },
+                                    new OrientationStep { Angle = 0 },
+                                    new WaypointStep { Destination = new SimVector3(20, 0, 20) },
+                                    new OrientationStep { Angle = 45 },
+                                }
+                            },
+                            new NavigationRoute
+                            {
+                                TargetLocation = LocationType.Station3,
+                                Steps = new List<NavigationStep>
+                                {
+                                    new OrientationStep { Angle = 90 },
+                                    new WaypointStep { Destination = new SimVector3(10, 0, 0) },
+                                    new OrientationStep { Angle = 180 },
+                                    new WaypointStep { Destination = new SimVector3(10, 0, -10) },
+                                    new OrientationStep { Angle = 90 },
+                                    new WaypointStep { Destination = new SimVector3(20, 0, -10) },
+                                    new OrientationStep { Angle = 180 },
+                                    new WaypointStep { Destination = new SimVector3(20, 0, -20) },
+                                    new OrientationStep { Angle = 135 },
                                 }
                             }
                         }
@@ -106,7 +240,6 @@ namespace BringMIPHome.Simulation
                 ExtractTimeCost = 2,
                 UploadEnergyCost = 4f,
                 UploadTimeCost = 4,
-                ExtraActionTypes = new List<ActionType>(),
                 TargetEnergy = null,
                 RandomSeed = null,
                 Roles = new List<RoleParams>

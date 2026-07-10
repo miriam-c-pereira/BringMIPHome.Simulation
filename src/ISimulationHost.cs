@@ -29,6 +29,8 @@ namespace BringMIPHome.Simulation
 
     public interface ISimulationHost
     {
+        SimConfig SimConfig { get; }
+        
         /// <summary>
         /// Current simulation telemetry exposed to external systems.
         /// </summary>

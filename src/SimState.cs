@@ -15,7 +15,7 @@ namespace BringMIPHome.Simulation
 
         public List<RoverBattery> Batteries { get; set; } = new List<RoverBattery>();
 
-        public LocationType CurrentLocation { get; set; } = 0;
+        public LocationType CurrentLocation { get; set; } = LocationType.Start;
 
         public DoneReasonType DoneReason { get; set; }
 

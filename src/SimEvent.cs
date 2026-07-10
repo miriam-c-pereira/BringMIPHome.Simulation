@@ -7,7 +7,11 @@ namespace BringMIPHome.Simulation
 
     }
 
-    public class DoneEvent : SimulationEvent
+    public sealed class SimulationStartedEvent : SimulationEvent
+    {
+    }
+
+    public class SimulationFinishedEvent : SimulationEvent
     {
         public DoneReasonType Done { get; set; }
 

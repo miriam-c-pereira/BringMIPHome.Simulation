@@ -3,17 +3,10 @@ namespace BringMIPHome.Simulation
     using System;
     using System.Collections.Generic;
     using System.ComponentModel;
-    using System.Linq;
 
     public class SimulationTelemetry : ISimulationTelemetry, INotifyPropertyChanged
     {
         public event PropertyChangedEventHandler PropertyChanged = (sender, args) => { };
-
-        //public SimulationTelemetry(RoverTelemetry roverTelemetry, StationTelemetry stationTelemetry)
-        //{
-        //    this.rover = roverTelemetry ?? new RoverTelemetry();
-        //    this.currentStation = stationTelemetry ?? new StationTelemetry();
-        //}
 
         internal RoverTelemetry rover;
         public IRoverTelemetry Rover => this.rover;
@@ -26,8 +19,19 @@ namespace BringMIPHome.Simulation
             this.PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
-        private float timeLeft;
 
+        private SimulationStatus status = SimulationStatus.NotStarted;
+        public SimulationStatus Status
+        {
+            get => this.status;
+            set
+            {
+                this.status = value;
+                this.Notify(nameof(this.Status));
+            }
+        }
+
+        private float timeLeft;
         public float TimeLeft
         {
             get => this.timeLeft;
@@ -57,9 +61,10 @@ namespace BringMIPHome.Simulation
         }
 
         private IReadOnlyList<ActionType> validActions = Array.Empty<ActionType>();
+
         public IReadOnlyList<ActionType> ValidActions
         {
-            get => this.validActions;       
+            get => this.validActions;
             set
             {
                 this.validActions = value ?? Array.Empty<ActionType>();
@@ -69,6 +74,8 @@ namespace BringMIPHome.Simulation
 
 
         private ActionType currentAction;
+
+
         public ActionType CurrentAction
         {
             get => this.currentAction;

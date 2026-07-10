@@ -48,7 +48,12 @@ namespace BringMIPHome.Simulation
         TargetEnergyReached
     }
 
-
+    public enum SimulationStatus
+    {
+        NotStarted,
+        Running,
+        Finished
+    }
 
 
 }

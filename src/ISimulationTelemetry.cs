@@ -5,6 +5,8 @@ namespace BringMIPHome.Simulation
 
     public interface ISimulationTelemetry : INotifyPropertyChanged
     {
+        SimulationStatus Status { get; }
+        
         float TimeLeft { get; }
 
         DoneReasonType DoneReason { get; }
