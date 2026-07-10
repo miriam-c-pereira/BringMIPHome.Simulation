@@ -294,12 +294,12 @@ namespace BringMIPHome.Simulation
 
                 case PositionUpdatedEvent positionUpdatedEvent:
                     this.telemetry.rover.Position = positionUpdatedEvent.Position;
-                    this.telemetry.rover.LinearVelocity = positionUpdatedEvent.Velocity;
+                    this.telemetry.rover.LinearVelocity = positionUpdatedEvent.LinearVelocity;
                     break;
 
                 case RotationUpdatedEvent rotationUpdatedEvent:
                     this.telemetry.rover.Heading = rotationUpdatedEvent.Heading;
-                    //this.telemetry.rover.AngularVelocity = rotationUpdatedEvent.AngularVelocity;
+                    this.telemetry.rover.AngularVelocity = rotationUpdatedEvent.AngularVelocity;
                     break;
 
                 default:

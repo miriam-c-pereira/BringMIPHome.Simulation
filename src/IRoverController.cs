@@ -18,7 +18,8 @@ namespace BringMIPHome.Simulation
     public abstract class RoverEvent : SimEventArgs
     {
     }
-
+   
+    
     public enum NavigationStopReason { None, ObstacleDetected, }
 
     public class NavigationStartedEvent : RoverEvent
@@ -34,14 +35,18 @@ namespace BringMIPHome.Simulation
 
     public class PositionUpdatedEvent : RoverEvent
     {
+        private float estimateTimeToDestination;
         public SimVector3 Position { get; set; }
-        public float Velocity { get; set; }
+        public float LinearVelocity { get; set; }
+        public float TotalDistance { get; set; }
+        public float EstimateTimeToDestination { get; set; }
     }
 
     public class RotationUpdatedEvent : RoverEvent
     {
         public SimVector3 Rotation { get; set; }
         public float Heading { get; set; }
+        public float AngularVelocity { get; set; }
     }
 
     public class RoverGotoArgs : RoverActionArgs
