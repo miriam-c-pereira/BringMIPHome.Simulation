@@ -183,9 +183,9 @@ namespace BringMIPHome.Simulation
                                 TargetLocation = LocationType.Station1,
                                 Steps = new List<NavigationStep>
                                 {
-                                    new OrientationStep { Angle = -90 },
+                                    new OrientationStep { Angle = 270 },
                                     new WaypointStep { Destination = new SimVector3(-20, 0, 0) },
-                                    new OrientationStep { Angle = 90 },
+                                    new OrientationStep { Angle = 0 },
                                     new WaypointStep { Destination = new SimVector3(-20, 0, 20) },
                                     new OrientationStep { Angle = 315 },
                                 }
