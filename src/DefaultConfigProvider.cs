@@ -10,11 +10,11 @@ namespace BringMIPHome.Simulation
             {
                 ExtractionDuration = 2,
                 UploadDuration = 4,
-                BatteryUnitAnimationStepTime = 100/ 1000f, // 100ms
+                BatteryUnitAnimationStepTime = 100 / 1000f, // 100ms
             };
         }
-        
-        
+
+
         public SimUiConfig GetSimUiConfig()
         {
             return new SimUiConfig()
@@ -25,11 +25,15 @@ namespace BringMIPHome.Simulation
                     {
                         Location = LocationType.Station1,
                         DisplayName = "1",
-                        Position = new SimVector3(0, 0, 0),
-                        Rotation = new SimVector3(0, 0, 0),
+
+                        Position = new SimVector3(-24.24f, 0, 24.24f),
+                        Rotation = new SimVector3(0, -225, 0),
+
+                        RoverPosition = new SimVector3(-20, 0, 20),
+                        RoverHeading = 315,
+
                         NavigationRoutes = new List<NavigationRoute>
                         {
-                           
                             new NavigationRoute
                             {
                                 TargetLocation = LocationType.Station2,
@@ -66,14 +70,18 @@ namespace BringMIPHome.Simulation
                             }
                         }
                     },
-                    
-                    
+
+
                     new LocationUiConfig
                     {
                         Location = LocationType.Station2,
                         DisplayName = "2",
-                        Position = new SimVector3(0, 0, 0),
-                        Rotation = new SimVector3(0, 0, 0),
+
+                        Position = new SimVector3(23.53f, 0, 23.53f),
+                        Rotation = new SimVector3(0, 225, 0),
+
+                        RoverPosition = new SimVector3(20, 0, 20),
+                        RoverHeading = 45,
 
 
                         NavigationRoutes = new List<NavigationRoute>
@@ -114,21 +122,20 @@ namespace BringMIPHome.Simulation
                                     new OrientationStep { Angle = 135 },
                                 }
                             }
-
                         }
-
-
                     },
-                    
-                    
-                    
-                    
+
+
                     new LocationUiConfig
                     {
                         Location = LocationType.Station3,
                         DisplayName = "3",
-                        Position = new SimVector3(0, 0, 0),
-                        Rotation = new SimVector3(0, 0, 0),
+
+                        Position = new SimVector3(24.24f, 0, -24.24f),
+                        Rotation = new SimVector3(0, -45, 0),
+
+                        RoverPosition = new SimVector3(20, 0, -20),
+                        RoverHeading = 135,
 
                         NavigationRoutes = new List<NavigationRoute>
                         {
@@ -165,8 +172,6 @@ namespace BringMIPHome.Simulation
                                 }
                             },
                         }
-
-
                     },
 
                     new LocationUiConfig
@@ -221,9 +226,7 @@ namespace BringMIPHome.Simulation
                                 }
                             }
                         }
-
                     },
-
                 }
             };
         }
@@ -275,7 +278,6 @@ namespace BringMIPHome.Simulation
                     {
                         Location = LocationType.Station1,
                         AccumulatorInitialValue = 0,
-                        
                     },
                     new ChargingStationParams
                     {
