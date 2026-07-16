@@ -1,6 +1,6 @@
 {
   "name": "com.miriam-pereira.bringmiphome.simulation",
-  "version": "1.0.0",
+  "version": "1.7.16",
   "displayName": "Bring MIP Home - Simulation Core",
   "description": "state machine and rules logic",
   "unity": "2022.3",

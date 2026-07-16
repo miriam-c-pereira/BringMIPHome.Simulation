@@ -205,6 +205,8 @@ namespace BringMIPHome.Simulation
 
             this.telemetry.ValidActions = Array.Empty<ActionType>();
 
+            this.lastExtractionOutcome = null;
+
             this.currentAction = action;
             this.telemetry.CurrentAction = this.currentAction;
 
@@ -262,10 +264,11 @@ namespace BringMIPHome.Simulation
             switch (e)
             {
                 case NavigationStartedEvent navigationStartedEvent:
+                    this.telemetry.rover.IsMoving = true;
                     break;
 
                 case NavigationStoppedEvent navigationStoppedEvent:
-
+                    this.telemetry.rover.IsMoving = false;
                     ActionType gotoAction;
                     switch (navigationStoppedEvent.Args.NavigationRoute.TargetLocation)
                     {
@@ -355,10 +358,7 @@ namespace BringMIPHome.Simulation
                 }
             }
 
-            if (this.state.DoneReason == DoneReasonType.NotDone)
-            {
-                this.telemetry.ValidActions = this.GetValidActions();
-            }
+            this.telemetry.ValidActions = this.GetValidActions();
         }
 
 
@@ -464,6 +464,7 @@ namespace BringMIPHome.Simulation
 
                 currentStation.Accumulator = 0f;
                 currentStation.TotalUploads++;
+                currentStation.ConsecutiveRewards = 0;
                 UpdateStationTelemetry(this.telemetry.currentStation, currentStation);
             }
         }
@@ -529,6 +530,8 @@ namespace BringMIPHome.Simulation
                 targetStation.ConsecutiveFailures += 1;
                 targetStation.TotalFailures += 1;
             }
+
+            targetStation.LastExtractOutcome = outcome;
         }
 
         private ExtractionOutcome GetExtractionOutcome(StationState station)
@@ -751,12 +754,9 @@ namespace BringMIPHome.Simulation
                 }
             }
 
-            if (this.state.CurrentLocation != LocationType.Start && currentStation.RoleParams != null)
+            if (this.state.CurrentLocation != LocationType.Start)
             {
-                if (currentStation.RoleParams.Id != RoleType.Depleted)
-                {
-                    actions.Add(ActionType.Extract);
-                }
+                actions.Add(ActionType.Extract);
 
                 //if the accumulator has nothing there is no point to upload nothing and lose energy!
                 if (currentStation.Accumulator > 0f)
