@@ -56,28 +56,17 @@ namespace BringMIPHome.Simulation
                 new RoverBattery { Id = 2, Energy = this.SimConfig.EnergyInit / 2.0f },
             };
 
-            // Generate a random assignment of role IDs to station indices.
-            // The array index represents the station index, and the value at that index
-            // is the role ID assigned to that station.
-            // Example: [1, 0, 2] means:
-            //   CurrentStation 0 -> Role 1
-            //   CurrentStation 1 -> Role 0
-            //   CurrentStation 2 -> Role 2
-            var stationRoleIds = this.permutationGenerator.GetRandomCombination();
 
             var chargingStations = new List<StationState>();
-            // Assign roles to all charging stations except
-            // the Start location (the final charging station), as it is not assigned a role. 
-            for (var index = 0; index < this.SimConfig.ChargingStations.Count - 1; index++)
+            for (var index = 0; index < this.SimConfig.ChargingStations.Count; index++)
             {
                 var chargingStationParams = this.SimConfig.ChargingStations[index];
 
-                var roleParams = this.SimConfig.Roles.First(x => x.Id == stationRoleIds[index]);
-                chargingStations.Add(new StationState(chargingStationParams, roleParams!));
+                chargingStations.Add(new StationState(chargingStationParams));
             }
 
-            //add the Start location as the last station in the list, with no role assigned
-            chargingStations.Add(new StationState(this.SimConfig.ChargingStations.Last(), null));
+            //add the Start location as the last station in the list
+            chargingStations.Add(new StationState());
 
             var simState = new SimState
             {
@@ -114,6 +103,38 @@ namespace BringMIPHome.Simulation
             var actions = this.GetValidActions();
             this.telemetry.ValidActions = actions;
         }
+
+        private void AssignRoles(LocationType initialLocation)
+        {
+            // Generate a random assignment of role IDs to station indices.
+            // The array index represents the station index, and the value at that index
+            // is the role ID assigned to that station.
+            // Example: [1, 0, 2] means:
+            //   CurrentStation 0 -> Role 1
+            //   CurrentStation 1 -> Role 0
+            //   CurrentStation 2 -> Role 2
+            int[] stationRoleIds;
+
+            if (this.SimConfig.EnsureFirstStationIsNotDepleted)
+            {
+                var pos = this.state.ChargingStations.FindIndex(x => x.Location == initialLocation);
+                stationRoleIds = this.permutationGenerator.GetRandomCombination(pos);
+            }
+            else
+            {
+                stationRoleIds = this.permutationGenerator.GetRandomCombination();
+            }
+
+            // Assign roles to all charging stations except the Start location (the final charging station), as it is not assigned a role. 
+
+            for (var index = 0; index < this.SimConfig.ChargingStations.Count - 1; index++)
+            {
+                var roleParams = this.SimConfig.Roles.First(x => x.Id == stationRoleIds[index]);
+                this.state.ChargingStations[index].RoleParams = roleParams;
+            }
+        }
+
+
 
 
         public void InitializeControllers(IRoverController rover, IEnumerable<IChargingStationController> chargingStations, IMissionControlController missionControl)
@@ -195,6 +216,33 @@ namespace BringMIPHome.Simulation
 
             if (this.telemetry.Status == SimulationStatus.NotStarted)
             {
+                LocationType firstLocation;
+                
+                // To start the simulation, the user must select an initial navigation action (e.g., GoToStation1 through GoToStation4).
+                switch (action)
+                {
+                    case ActionType.GoToStation1:
+                        firstLocation = LocationType.Station1;
+                        break;
+                    
+                    case ActionType.GoToStation2:
+                        firstLocation = LocationType.Station2; 
+                        break;
+                    
+                    case ActionType.GoToStation3:
+                        firstLocation = LocationType.Station3;
+                        break;
+                    
+                    case ActionType.GoToStation4:
+                        firstLocation = LocationType.Station4;
+                        break;
+                    
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(action), action, null);
+                }
+
+                this.AssignRoles(firstLocation);
+
                 this.telemetry.Status = SimulationStatus.Running;
                 this.telemetry.TimeLeft = this.SimConfig.TimeInit;
 
@@ -298,6 +346,9 @@ namespace BringMIPHome.Simulation
                 case PositionUpdatedEvent positionUpdatedEvent:
                     this.telemetry.rover.Position = positionUpdatedEvent.Position;
                     this.telemetry.rover.LinearVelocity = positionUpdatedEvent.LinearVelocity;
+
+                    var cost = positionUpdatedEvent.DistanceMoved * this.SimConfig.NavigationEnergyCost;
+                    this.AddEnergy(-cost);
                     break;
 
                 case RotationUpdatedEvent rotationUpdatedEvent:
@@ -444,7 +495,7 @@ namespace BringMIPHome.Simulation
                 var arrivedStation = this.GetCurrentStation();
 
                 UpdateStationTelemetry(this.telemetry.currentStation, arrivedStation);
-                this.AddEnergy(-this.SimConfig.GoToEnergyCost);
+                //this.AddEnergy(-this.SimConfig.GoToEnergyCost);
             }
         }
 
@@ -643,33 +694,26 @@ namespace BringMIPHome.Simulation
         {
             //CHARGING STATIONS
 
-            //minimum requirement of 3 charging stations (Station1, Station2, Start)
-            if (config.ChargingStations == null || config.ChargingStations.Count < 3)
+            //minimum requirement of 2 charging stations (Station1, Station2)
+            if (config.ChargingStations == null || config.ChargingStations.Count < 2)
             {
-                throw new Exception("At least three charging stations must be defined in the configuration.");
+                throw new Exception("At least two charging stations must be defined in the configuration.");
             }
 
-            //maximum requirement of 5 charging stations (Station1, Station2, Station3, Station4, Start)
-            if (config.ChargingStations == null || config.ChargingStations.Count > 5)
+            //maximum requirement of 4 charging stations (Station1, Station2, Station3, Station4)
+            if (config.ChargingStations == null || config.ChargingStations.Count > 4)
             {
-                throw new Exception("No more than five charging stations can be defined in the configuration.");
+                throw new Exception("No more than four charging stations can be defined in the configuration.");
             }
 
-            // Validate that all station locations (excluding the Start location) are unique and sequential.
-            // The Start location is validated separately because it must always be the final entry in the list.
-            for (var lx = 0; lx < config.ChargingStations.Count - 1; lx++)
+            // Validate that all station locations are unique and sequential.
+            for (var lx = 0; lx < config.ChargingStations.Count; lx++)
             {
                 var loc = (LocationType)lx; //0 - > Station1, 1 -> Station2, 2 -> Station3, 3 -> Station4
                 if (config.ChargingStations[lx].Location != loc)
                 {
                     throw new Exception($"TargetLocation {loc} not found.");
                 }
-            }
-
-            // Ensure the final charging station represents the Start location.
-            if (config.ChargingStations.Last().Location != LocationType.Start)
-            {
-                throw new Exception("The last charging station must be located at the Start location.");
             }
 
             //ROLES
@@ -689,9 +733,9 @@ namespace BringMIPHome.Simulation
             }
 
             // one to-one mapping between charging stations and roles, excluding the Start location.
-            if (config.ChargingStations.Count - 1 != config.Roles.Count)
+            if (config.ChargingStations.Count != config.Roles.Count)
             {
-                throw new Exception("The number of charging stations (excluding Start) must match the number of roles.");
+                throw new Exception("The number of charging stations must match the number of roles.");
             }
         }
 

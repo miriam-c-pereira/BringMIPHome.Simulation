@@ -19,14 +19,14 @@ namespace BringMIPHome.Simulation
 
         public StationState()
         {
-            this.Location = LocationType.None;
+            this.Location = LocationType.Start;
             this.ChargingStationParams = new ChargingStationParams();
         }
-        
+
         /// <summary>
         /// Standard constructor for original initialization.
         /// </summary>
-        public StationState(ChargingStationParams chargingStationParams, RoleParams? roleParams)
+        public StationState(ChargingStationParams chargingStationParams)
         {
             if (chargingStationParams == null)
             { 
@@ -37,7 +37,7 @@ namespace BringMIPHome.Simulation
             this.ChargingStationParams = chargingStationParams;
 
             // Can be null if TargetLocation is TargetLocation.Start
-            this.RoleParams = roleParams;
+            //this.RoleParams = roleParams;
 
             this.Accumulator = chargingStationParams.AccumulatorInitialValue;
         }

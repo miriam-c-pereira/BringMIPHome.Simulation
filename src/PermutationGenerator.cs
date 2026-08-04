@@ -16,16 +16,50 @@ namespace BringMIPHome.Simulation
             this.numberOfRoles = numberOfRoles;
             this.all = GetCombinations(numberOfRoles);
         }
-        
-        public int[] GetRandomCombination()
+
+        public int[] GetRandomCombination(int? nonZeroPosition = null)
         {
             if (this.all.Length == 0)
             {
                 throw new InvalidOperationException("No combinations available.");
             }
-         
-            var index = this.random.Next(this.all.Length);
-            return this.all[index];
+
+            var goodCombinations = this.all;
+
+            if (nonZeroPosition != null)
+            {
+                // If nonZeroPosition is specified (not null), calculate combinations that in the nonZeroPosition don't have zero role
+
+                var list = new List<int[]>();
+
+                foreach (var combination in this.all)
+                {
+                    var good = true;
+
+                    for (var i = 0; i < this.numberOfRoles; i++)
+                    {
+                        if (i == nonZeroPosition)
+                        {
+                            if (combination[nonZeroPosition.Value] == 0)
+                            {
+                                //ignore this combination because it does have 0 in the nonZeroPosition
+                                good = false;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (good)
+                    {
+                        list.Add(combination);
+                    }
+                }
+
+                goodCombinations = list.ToArray();
+            }
+
+            var index = this.random.Next(goodCombinations.Length);
+            return goodCombinations[index];
         }
 
         public int[] GetRandomFeasibleReassignment(int[] state, int newZeroPosition)

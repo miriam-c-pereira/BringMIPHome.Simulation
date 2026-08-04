@@ -25,12 +25,16 @@ namespace BringMIPHome.Simulation
     public class NavigationStartedEvent : RoverEvent
     {
         public RoverGotoArgs Args { get; set; }
+        public float EstimatedTimeToDestination { get; set; }
+        public float EstimatedDistanceToDestination { get; set; }
     }
 
     public class NavigationStoppedEvent : RoverEvent
     {
         public RoverGotoArgs Args { get; set; }
         public NavigationStopReason StopReason { get; set; }
+        public float TotalDistance { get; set; }
+        public float TotalTime { get; set; }
     }
 
     public class PositionUpdatedEvent : RoverEvent
@@ -39,6 +43,7 @@ namespace BringMIPHome.Simulation
         public SimVector3 Position { get; set; }
         public float LinearVelocity { get; set; }
         public float TotalDistance { get; set; }
+        public float DistanceMoved { get; set; }
         public float EstimateTimeToDestination { get; set; }
     }
 

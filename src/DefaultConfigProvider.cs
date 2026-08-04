@@ -1,9 +1,13 @@
 namespace BringMIPHome.Simulation
 {
+    using System;
     using System.Collections.Generic;
 
-    public class DefaultConfigProvider
+    public class DefaultConfigProvider : IDefaultConfigProvider
     {
+        public static readonly string DefaultId = "default";
+
+
         public ChargingStationAnimationConfig GetChargingStationAnimationConfig()
         {
             return new ChargingStationAnimationConfig()
@@ -235,14 +239,20 @@ namespace BringMIPHome.Simulation
         {
             return new SimConfig
             {
+                Id = DefaultId,
+                DisplayName = "Default Simulation",
                 EnergyInit = 1000f,
                 TimeInit = 1200,
-                GoToEnergyCost = 20.0f,
-                GoToTimeCost = 10,
+                //GoToEnergyCost = 20.0f,
+                //GoToTimeCost = 10,
+                RoverMoveSpeed = 5f,
+                RoverRotationSpeed = 90f,
+                EnsureFirstStationIsNotDepleted = true,
+                NavigationEnergyCost = 10.0f,
                 ExtractEnergyCost = 2f,
-                ExtractTimeCost = 2,
+                //ExtractTimeCost = 2,
                 UploadEnergyCost = 4f,
-                UploadTimeCost = 4,
+                //UploadTimeCost = 4,
                 TargetEnergy = null,
                 RandomSeed = null,
                 Roles = new List<RoleParams>
@@ -290,11 +300,11 @@ namespace BringMIPHome.Simulation
                         AccumulatorInitialValue = 0,
                     },
 
-                    new ChargingStationParams
-                    {
-                        Location = LocationType.Start,
-                        AccumulatorInitialValue = 0,
-                    },
+                    //new ChargingStationParams
+                    //{
+                    //    Location = LocationType.Start,
+                    //    AccumulatorInitialValue = 0,
+                    //},
                 },
             };
         }
