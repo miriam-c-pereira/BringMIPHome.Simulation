@@ -23,8 +23,12 @@ namespace BringMIPHome.Simulation
     public class ActionEvent : SimulationEvent
     {
         public ActionType Action { get; private set; }
+        
         public SimState Before { get; private set; }
+
         public SimState After { get; private set; }
+
+        public long TimestampMilliseconds { get; private set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
         public ActionEvent(SimState before, ActionType action, SimState after)
         {
