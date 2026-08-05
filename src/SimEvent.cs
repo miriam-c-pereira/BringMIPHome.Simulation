@@ -4,7 +4,7 @@ namespace BringMIPHome.Simulation
 
     public abstract class SimulationEvent : SimEventArgs
     {
-
+        public long TimestampMilliseconds { get; private set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
 
     public sealed class SimulationStartedEvent : SimulationEvent
@@ -28,13 +28,12 @@ namespace BringMIPHome.Simulation
 
         public SimState After { get; private set; }
 
-        public long TimestampMilliseconds { get; private set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-
         public ActionEvent(SimState before, ActionType action, SimState after)
         {
             this.Before = before;
             this.Action = action;
             this.After = after;
         }
+
     }
 }
