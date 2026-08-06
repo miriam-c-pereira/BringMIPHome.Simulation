@@ -23,6 +23,8 @@ namespace BringMIPHome.Simulation
         private readonly PermutationGenerator permutationGenerator;
         private ExtractionOutcome? lastExtractionOutcome;
         private bool isInitialized;
+        // Tracks triggered time marks so each event fires ONLY ONCE per simulation lifecycle
+        private readonly HashSet<MissionTimeThreshold> triggeredTimeMarks = new HashSet<MissionTimeThreshold>();
 
         // Injected interfaces for decoupled communication
         private IRoverController? roverController;
@@ -179,22 +181,14 @@ namespace BringMIPHome.Simulation
             this.state.TimeLeft = Math.Max(0, this.state.TimeLeft - deltaTime);
             this.telemetry.TimeLeft = this.state.TimeLeft;
 
-            if (this.telemetry.TimeLeft <= 0f)
-            {
-                this.state.DoneReason = DoneReasonType.TimeExpired;
-                this.telemetry.DoneReason = this.state.DoneReason;
-                this.telemetry.Status = SimulationStatus.Finished;
-                this.telemetry.ValidActions = this.GetValidActions();
+            // Check and raise MissionUpdateTimeEvent if a threshold has been reached
+            this.CheckAndRaiseTimeMarkEvents();
 
-                this.SimulationEvent?.Invoke(this, new SimulationFinishedEvent
-                {
-                    Done = this.state.DoneReason,
-                    TotalEnergy = this.telemetry.Rover.TotalBatteryEnergy,
-                    TimeLeft = this.telemetry.TimeLeft
-                });
+            if (this.CheckIfSimulationIsDone())
+            {
+                this.telemetry.ValidActions = this.GetValidActions();
             }
         }
-
 
         public bool TryStartAction(ActionType action)
         {
@@ -217,31 +211,34 @@ namespace BringMIPHome.Simulation
             if (this.telemetry.Status == SimulationStatus.NotStarted)
             {
                 LocationType firstLocation;
-                
+
                 // To start the simulation, the user must select an initial navigation action (e.g., GoToStation1 through GoToStation4).
                 switch (action)
                 {
                     case ActionType.GoToStation1:
                         firstLocation = LocationType.Station1;
                         break;
-                    
+
                     case ActionType.GoToStation2:
-                        firstLocation = LocationType.Station2; 
+                        firstLocation = LocationType.Station2;
                         break;
-                    
+
                     case ActionType.GoToStation3:
                         firstLocation = LocationType.Station3;
                         break;
-                    
+
                     case ActionType.GoToStation4:
                         firstLocation = LocationType.Station4;
                         break;
-                    
+
                     default:
                         throw new ArgumentOutOfRangeException(nameof(action), action, null);
                 }
 
                 this.AssignRoles(firstLocation);
+
+                // Reset triggered events tracker when simulation starts
+                this.triggeredTimeMarks.Clear();
 
                 this.telemetry.Status = SimulationStatus.Running;
                 this.telemetry.TimeLeft = this.SimConfig.TimeInit;
@@ -263,6 +260,39 @@ namespace BringMIPHome.Simulation
             return true;
         }
 
+        private void CheckAndRaiseTimeMarkEvents()
+        {
+            if (this.SimConfig.TimeInit <= 0f)
+            {
+                return;
+            }
+
+            // Calculate current percentage of remaining time
+            float percentRemaining = (this.state.TimeLeft / this.SimConfig.TimeInit) * 100f;
+
+            // Ordered evaluation from highest to lowest mark threshold
+            CheckAndEmitMark(MissionTimeThreshold.Percent75, 75f, percentRemaining);
+            CheckAndEmitMark(MissionTimeThreshold.Percent50, 50f, percentRemaining);
+            CheckAndEmitMark(MissionTimeThreshold.Percent25, 25f, percentRemaining);
+            CheckAndEmitMark(MissionTimeThreshold.Percent5, 5f, percentRemaining);
+        }
+
+        private void CheckAndEmitMark(MissionTimeThreshold threshold, float thresholdPercentage, float currentPercentage)
+        {
+            if (currentPercentage > thresholdPercentage || this.triggeredTimeMarks.Contains(threshold))
+            {
+                return;
+            }
+
+            this.triggeredTimeMarks.Add(threshold);
+
+            var missionTimeThresholdReachedEvent = new MissionTimeThresholdReachedEvent
+            {
+                Threshold = threshold
+            };
+
+            this.SimulationEvent?.Invoke(this, missionTimeThresholdReachedEvent);
+        }
 
         private void OnChargingStationEvent(object sender, ChargingStationEvent e)
         {
@@ -349,6 +379,12 @@ namespace BringMIPHome.Simulation
 
                     var cost = positionUpdatedEvent.DistanceMoved * this.SimConfig.NavigationEnergyCost;
                     this.AddEnergy(-cost);
+                    
+                    if (this.CheckIfSimulationIsDone())
+                    {
+                        this.telemetry.ValidActions = this.GetValidActions();
+                    }
+
                     break;
 
                 case RotationUpdatedEvent rotationUpdatedEvent:
@@ -384,33 +420,57 @@ namespace BringMIPHome.Simulation
 
             this.currentAction = ActionType.None;
 
-            //Note: avoid firing twice if the simulation is already done (TimeExpired)
-            if (this.state.DoneReason == DoneReasonType.NotDone)
-            {
-                if (this.telemetry.Rover.TotalBatteryEnergy <= 0f)
-                {
-                    this.state.DoneReason = DoneReasonType.EnergyDepleted;
-                }
-                else if (this.SimConfig.TargetEnergy != null && this.telemetry.Rover.TotalBatteryEnergy >= this.SimConfig.TargetEnergy.Value)
-                {
-                    this.state.DoneReason = DoneReasonType.TargetEnergyReached;
-                }
-
-                this.telemetry.DoneReason = this.state.DoneReason;
-
-                if (this.state.DoneReason != DoneReasonType.NotDone)
-                {
-                    this.SimulationEvent?.Invoke(this, new SimulationFinishedEvent
-                    {
-                        Done = this.telemetry.DoneReason,
-                        TotalEnergy = this.telemetry.Rover.TotalBatteryEnergy,
-                        TimeLeft = this.telemetry.TimeLeft
-                    });
-                }
-            }
+            this.CheckIfSimulationIsDone();
 
             this.telemetry.ValidActions = this.GetValidActions();
         }
+
+
+        private bool CheckIfSimulationIsDone()
+        {
+            //Note: avoid firing twice if the simulation is already done (TimeExpired)
+            if (this.state.DoneReason != DoneReasonType.NotDone)
+            {
+                return true;
+            }
+
+            if (this.telemetry.TimeLeft <= 0f)
+            {
+                this.state.DoneReason = DoneReasonType.TimeExpired;
+                this.telemetry.DoneReason = this.state.DoneReason;
+            }
+            else if (this.telemetry.Rover.TotalBatteryEnergy <= 0f)
+            {
+                this.state.DoneReason = DoneReasonType.EnergyDepleted;
+                this.telemetry.DoneReason = this.state.DoneReason;
+            }
+            else if (this.SimConfig.TargetEnergy != null && this.telemetry.Rover.TotalBatteryEnergy >= this.SimConfig.TargetEnergy.Value)
+            {
+                this.state.DoneReason = DoneReasonType.TargetEnergyReached;
+                this.telemetry.DoneReason = this.state.DoneReason;
+            }
+
+            if (this.state.DoneReason != DoneReasonType.NotDone)
+            {
+                this.telemetry.Status = SimulationStatus.Finished;
+
+                var e = new SimulationFinishedEvent
+                {
+                    Done = this.telemetry.DoneReason,
+                    TotalEnergy = this.telemetry.Rover.TotalBatteryEnergy,
+                    TimeLeft = this.telemetry.TimeLeft
+                };
+                this.SimulationEvent?.Invoke(this, e);
+
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+
 
 
         private void ExecuteAction(ActionType action, bool isStarting)

@@ -248,7 +248,7 @@ namespace BringMIPHome.Simulation
                 RoverMoveSpeed = 5f,
                 RoverRotationSpeed = 90f,
                 EnsureFirstStationIsNotDepleted = true,
-                NavigationEnergyCost = 10.0f,
+                NavigationEnergyCost = 3.0f,
                 ExtractEnergyCost = 2f,
                 //ExtractTimeCost = 2,
                 UploadEnergyCost = 4f,

@@ -7,9 +7,26 @@ namespace BringMIPHome.Simulation
         public long TimestampMilliseconds { get; private set; } = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
     }
 
+
     public sealed class SimulationStartedEvent : SimulationEvent
     {
     }
+
+    public enum MissionTimeThreshold
+    {
+        None= 0,
+        Percent75 = 75,
+        Percent50 = 50,
+        Percent25 = 25,
+        Percent5 = 5
+    }
+
+
+    public sealed class MissionTimeThresholdReachedEvent : SimulationEvent
+    {
+        public MissionTimeThreshold Threshold { get; set; }
+    }
+
 
     public class SimulationFinishedEvent : SimulationEvent
     {
