@@ -40,11 +40,11 @@ namespace BringMIPHome.Simulation
         AttachBattery
     }
 
-    public enum DoneReasonType
+    public enum SimulationCompletionReason
     {
-        NotDone,
+        None,
         EnergyDepleted,
-        TimeExpired,
+        TimeLimitReached,
         TargetEnergyReached
     }
 

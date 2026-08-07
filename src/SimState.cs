@@ -17,7 +17,7 @@ namespace BringMIPHome.Simulation
 
         public LocationType CurrentLocation { get; set; } = LocationType.Start;
 
-        public DoneReasonType DoneReason { get; set; }
+        public SimulationCompletionReason DoneReason { get; set; }
 
         public List<StationState> ChargingStations { get; set; } = new List<StationState>();
 

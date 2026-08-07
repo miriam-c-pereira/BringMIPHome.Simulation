@@ -9,7 +9,7 @@ namespace BringMIPHome.Simulation
         
         float TimeLeft { get; }
 
-        DoneReasonType DoneReason { get; }
+        SimulationCompletionReason CompletionReason { get; }
 
         IRoverTelemetry Rover { get; }
 

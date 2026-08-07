@@ -75,7 +75,7 @@ namespace BringMIPHome.Simulation
                 Batteries = batteries,
                 TimeLeft = this.SimConfig.TimeInit,
                 CurrentLocation = LocationType.Start,
-                DoneReason = DoneReasonType.NotDone,
+                DoneReason = SimulationCompletionReason.None,
                 ChargingStations = chargingStations,
             };
 
@@ -86,7 +86,7 @@ namespace BringMIPHome.Simulation
             this.telemetry = new SimulationTelemetry
             {
                 TimeLeft = this.state.TimeLeft,
-                DoneReason = this.state.DoneReason,
+                CompletionReason = this.state.DoneReason,
                 CurrentAction = this.currentAction,
                 rover = new RoverTelemetry
                 {
@@ -429,34 +429,34 @@ namespace BringMIPHome.Simulation
         private bool CheckIfSimulationIsDone()
         {
             //Note: avoid firing twice if the simulation is already done (TimeExpired)
-            if (this.state.DoneReason != DoneReasonType.NotDone)
+            if (this.state.DoneReason != SimulationCompletionReason.None)
             {
                 return true;
             }
 
             if (this.telemetry.TimeLeft <= 0f)
             {
-                this.state.DoneReason = DoneReasonType.TimeExpired;
-                this.telemetry.DoneReason = this.state.DoneReason;
+                this.state.DoneReason = SimulationCompletionReason.TimeLimitReached;
+                this.telemetry.CompletionReason = this.state.DoneReason;
             }
             else if (this.telemetry.Rover.TotalBatteryEnergy <= 0f)
             {
-                this.state.DoneReason = DoneReasonType.EnergyDepleted;
-                this.telemetry.DoneReason = this.state.DoneReason;
+                this.state.DoneReason = SimulationCompletionReason.EnergyDepleted;
+                this.telemetry.CompletionReason = this.state.DoneReason;
             }
             else if (this.SimConfig.TargetEnergy != null && this.telemetry.Rover.TotalBatteryEnergy >= this.SimConfig.TargetEnergy.Value)
             {
-                this.state.DoneReason = DoneReasonType.TargetEnergyReached;
-                this.telemetry.DoneReason = this.state.DoneReason;
+                this.state.DoneReason = SimulationCompletionReason.TargetEnergyReached;
+                this.telemetry.CompletionReason = this.state.DoneReason;
             }
 
-            if (this.state.DoneReason != DoneReasonType.NotDone)
+            if (this.state.DoneReason != SimulationCompletionReason.None)
             {
                 this.telemetry.Status = SimulationStatus.Finished;
 
                 var e = new SimulationFinishedEvent
                 {
-                    Done = this.telemetry.DoneReason,
+                    CompletionReason = this.telemetry.CompletionReason,
                     TotalEnergy = this.telemetry.Rover.TotalBatteryEnergy,
                     TimeLeft = this.telemetry.TimeLeft
                 };

@@ -45,9 +45,9 @@ namespace BringMIPHome.Simulation
             }
         }
 
-        private DoneReasonType doneReason;
+        private SimulationCompletionReason doneReason;
 
-        public DoneReasonType DoneReason
+        public SimulationCompletionReason CompletionReason
         {
             get => this.doneReason;
             set
@@ -55,7 +55,7 @@ namespace BringMIPHome.Simulation
                 if (this.doneReason != value)
                 {
                     this.doneReason = value;
-                    this.Notify(nameof(this.DoneReason));
+                    this.Notify(nameof(this.CompletionReason));
                 }
             }
         }

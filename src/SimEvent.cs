@@ -30,7 +30,7 @@ namespace BringMIPHome.Simulation
 
     public class SimulationFinishedEvent : SimulationEvent
     {
-        public DoneReasonType Done { get; set; }
+        public SimulationCompletionReason CompletionReason { get; set; }
 
         public float TotalEnergy { get; set; }
         
